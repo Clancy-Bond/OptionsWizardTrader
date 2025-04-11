@@ -1,11 +1,97 @@
 import streamlit as st
 import os
-import json
-from discord_bot_config import BotConfig
+from dotenv import load_dotenv
 
-# Initialize configuration
-bot_config = BotConfig()
+# Load environment variables
+load_dotenv()
 
+# Set page title and layout
+st.set_page_config(
+    page_title="Options AI Assistant",
+    page_icon="📊",
+    layout="wide"
+)
+
+# Title and description
+st.title("Options AI Assistant Dashboard")
+
+# Main content
+st.markdown("""
+## Welcome to the Options AI Assistant Dashboard
+
+This platform combines a powerful options price calculator with an intelligent Discord bot that helps traders understand their options positions and make informed decisions.
+
+### Key Features:
+
+1. **Options Calculator**: Estimate future option values based on target stock prices
+2. **Technical Analysis**: Get support-based stop loss recommendations
+3. **Unusual Activity Detection**: Identify potential market-moving options activity
+4. **Discord Bot Integration**: Interact with the options calculator through natural language on Discord
+
+### Getting Started:
+
+- Use the **Options Calculator** page to analyze options and estimate profits/losses
+- Configure your **Discord Bot** to connect with your Discord server and set channel access permissions
+- Ask the bot questions in your Discord server about options prices, stop loss levels, or unusual activity
+""")
+
+# Discord bot status
+st.header("Discord Bot Status")
+
+# Check if Discord token is configured
+discord_token = os.getenv('DISCORD_TOKEN')
+if discord_token:
+    st.success("✅ Discord Bot is configured and ready to use")
+    
+    # Display invitation URL (normally this would come from the bot itself)
+    invitation_url = "https://discord.com/oauth2/authorize?client_id=1354551896605589584&scope=bot&permissions=379904"
+    st.markdown(f"**Bot Invitation URL**: [Click to invite bot to your server]({invitation_url})")
+    
+    # Quick navigation to Discord configuration
+    st.markdown("**[Go to Discord Bot Configuration →](/Discord_Bot_Config)**")
+else:
+    st.error("❌ Discord Bot is not configured")
+    st.markdown("Please go to the **[Discord Bot Configuration](/Discord_Bot_Config)** page to set up your bot token.")
+
+# Quick links
+st.header("Quick Navigation")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Tools")
+    st.markdown("""
+    - [Options Calculator](/Options_Calculator)
+    - [Discord Bot Configuration](/Discord_Bot_Config)
+    """)
+
+with col2:
+    st.subheader("Documentation")
+    st.markdown("""
+    - [How to use the Options Calculator](#)
+    - [Discord Bot Commands](#)
+    - [Natural Language Query Format](#)
+    """)
+
+# Stats section (This would be populated with real data in a production app)
+st.header("Usage Statistics")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Calculations Performed", "1,243")
+with col2:
+    st.metric("Discord Queries", "856")
+with col3:
+    st.metric("Active Users", "32")
+
+# Add a footer with disclaimer
+st.markdown("---")
+st.markdown("""
+**Disclaimer:** This tool provides estimates based on current market data and mathematical models.
+Options trading involves significant risk, and actual results may vary. This is not financial advice.
+Always do your own research before making investment decisions.
+""")
+
+# Functions needed for the Discord Bot Configuration page
 def check_discord_token():
     """Check if Discord token is set in environment variables"""
     token = os.getenv("DISCORD_TOKEN")
@@ -39,143 +125,3 @@ def update_discord_token(token):
             f.write(f"DISCORD_TOKEN={token}\n")
     
     return True
-
-# Set up the Streamlit app
-st.set_page_config(page_title="OptionsWizard Admin", page_icon="🧙", layout="wide")
-
-st.title("🧙 OptionsWizard Admin Interface")
-
-# Sidebar for navigation
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Status", "Channel Configuration", "Admin Users"])
-
-# Status page
-if page == "Status":
-    st.header("System Status")
-    
-    # Check Discord token
-    token_status = check_discord_token()
-    token_status_text = "✅ Set" if token_status else "❌ Not Set"
-    token_status_color = "green" if token_status else "red"
-    
-    st.markdown(f"**Discord Token:** <span style='color:{token_status_color}'>{token_status_text}</span>", unsafe_allow_html=True)
-    
-    if not token_status:
-        with st.form("token_form"):
-            new_token = st.text_input("Enter Discord Bot Token", type="password")
-            submit_button = st.form_submit_button("Save Token")
-            
-            if submit_button and new_token:
-                if update_discord_token(new_token):
-                    st.success("Token updated successfully. Please restart the application for changes to take effect.")
-                    st.experimental_rerun()
-                else:
-                    st.error("Failed to update token.")
-    
-    # Channel whitelist status
-    channels = bot_config.get_channel_whitelist()
-    if channels:
-        st.markdown(f"**Whitelisted Channels:** {len(channels)}")
-        for channel in channels:
-            st.markdown(f"- {channel}")
-    else:
-        st.markdown("**Whitelisted Channels:** None (all channels allowed)")
-    
-    # Admin users status
-    admins = bot_config.get_admin_users()
-    if admins:
-        st.markdown(f"**Admin Users:** {len(admins)}")
-        for admin in admins:
-            st.markdown(f"- {admin}")
-    else:
-        st.markdown("**Admin Users:** None")
-
-# Channel Configuration page
-elif page == "Channel Configuration":
-    st.header("Channel Whitelist Configuration")
-    st.info("Adding channels to the whitelist restricts the bot to only respond in those channels. If the whitelist is empty, the bot will respond in all channels.")
-    
-    # Show current whitelisted channels
-    channels = bot_config.get_channel_whitelist()
-    if channels:
-        st.subheader("Current Whitelisted Channels")
-        for i, channel_id in enumerate(channels):
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.text(f"Channel ID: {channel_id}")
-            with col2:
-                if st.button("Remove", key=f"remove_channel_{i}"):
-                    if bot_config.remove_channel(channel_id):
-                        st.success(f"Removed channel {channel_id} from whitelist")
-                        st.rerun()
-                    else:
-                        st.error("Failed to remove channel")
-    else:
-        st.warning("No channels in whitelist. Bot will respond in all channels.")
-    
-    # Add new channel
-    st.subheader("Add Channel to Whitelist")
-    with st.form("add_channel_form"):
-        new_channel = st.text_input("Enter Channel ID")
-        submit_button = st.form_submit_button("Add Channel")
-        
-        if submit_button and new_channel:
-            try:
-                # Clean input and convert to integer to validate
-                new_channel = new_channel.strip()
-                int(new_channel)  # Validate that it's a number
-                
-                if bot_config.add_channel(new_channel):
-                    st.success(f"Added channel {new_channel} to whitelist")
-                    st.rerun()
-                else:
-                    st.error("Channel already in whitelist")
-            except ValueError:
-                st.error("Invalid channel ID. Must be a number.")
-
-# Admin Users page
-elif page == "Admin Users":
-    st.header("Admin Users Configuration")
-    st.info("Admin users have access to this configuration interface and can manage the bot settings.")
-    
-    # Show current admin users
-    admins = bot_config.get_admin_users()
-    if admins:
-        st.subheader("Current Admin Users")
-        for i, admin_id in enumerate(admins):
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.text(f"User ID: {admin_id}")
-            with col2:
-                if st.button("Remove", key=f"remove_admin_{i}"):
-                    if bot_config.remove_admin(admin_id):
-                        st.success(f"Removed user {admin_id} from admins")
-                        st.rerun()
-                    else:
-                        st.error("Failed to remove admin")
-    else:
-        st.warning("No admin users configured.")
-    
-    # Add new admin
-    st.subheader("Add Admin User")
-    with st.form("add_admin_form"):
-        new_admin = st.text_input("Enter User ID")
-        submit_button = st.form_submit_button("Add Admin")
-        
-        if submit_button and new_admin:
-            try:
-                # Clean input and convert to integer to validate
-                new_admin = new_admin.strip()
-                int(new_admin)  # Validate that it's a number
-                
-                if bot_config.add_admin(new_admin):
-                    st.success(f"Added user {new_admin} as admin")
-                    st.rerun()
-                else:
-                    st.error("User already an admin")
-            except ValueError:
-                st.error("Invalid user ID. Must be a number.")
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("© 2023 OptionsWizard")
