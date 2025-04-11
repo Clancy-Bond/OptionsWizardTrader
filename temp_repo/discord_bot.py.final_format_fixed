@@ -1,0 +1,1764 @@
+"""
+Fixed version of discord_bot.py with properly implemented handle_stop_loss_request method.
+"""
+
+# Import discord modules
+import discord
+from discord.ext import commands
+
+# Import numerical and data processing libraries
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import os
+import re
+import json
+import random
+import datetime
+import time
+import sys
+from collections import defaultdict
+
+# Load environment variables
+load_dotenv()
+
+# Define constants
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+
+# Try to download NLTK data, but proceed even if it fails
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+except Exception as e:
+    print(f"NLTK download error: {str(e)}")
+
+class OptionsBotNLP:
+    """Natural Language Processor for understanding options-related queries"""
+    
+    def __init__(self):
+        print("Initializing OptionsBotNLP")
+        # Load stopwords
+        try:
+            self.stop_words = set(stopwords.words('english'))
+            print(f"Loaded {len(self.stop_words)} stop words")
+        except Exception as e:
+            print(f"Error loading stopwords: {str(e)}")
+            # Fallback to a minimal set
+            self.stop_words = set(['a', 'an', 'the', 'and', 'or', 'but', 'if', 'of', 'at', 'by', 'for', 'with', 'about'])
+            print(f"Fallback: loaded {len(self.stop_words)} stop words")
+        
+        # Define keywords that indicate different request types
+        self.option_price_keywords = {'option', 'price', 'value', 'worth', 'cost', 'pricing', 'calculate', 'estimate', 
+                                     'premium', 'fair', 'call', 'put', 'pay', 'expir', 'strike', 'profit', 'loss', 'gain',
+                                     'return', 'make', 'breakeven', 'break-even', 'break', 'even'}
+        
+        self.stop_loss_keywords = {'stop', 'loss', 'recommendation', 'recommend', 'exit', 'cut', 'limit', 'downside',
+                                  'protect', 'protection', 'hedge', 'risk', 'manage', 'profit', 'secure', 'lock', 'target'}
+        
+        self.unusual_activity_keywords = {'unusual', 'activity', 'whale', 'flow', 'sweep', 'block', 'large', 'institutional',
+                                         'smart', 'money', 'option', 'volume', 'interest', 'sentiment', 'activity'}
+        
+        print(f"- option_price keywords: {', '.join(sorted(list(self.option_price_keywords))[:3])}...")
+        print(f"- stop_loss keywords: {', '.join(sorted(list(self.stop_loss_keywords))[:3])}...")
+        print(f"- unusual_activity keywords: {', '.join(sorted(list(self.unusual_activity_keywords))[:3])}...")
+        
+        # Regular expressions for extracting information
+        # Note: These are simplified regex patterns and may need refinement
+        
+        # Extract ticker symbols (2-5 uppercase letters, not followed by 'ing', 'ed', 'ly', etc.)
+        self.ticker_pattern = r'\b([A-Z]{2,5})(?!\w+\b)\b'
+        
+        # Extract option type (call or put) - case insensitive
+        self.option_type_pattern = r'\b(calls?|puts?)\b'
+        
+        # Extract option premium - amount paid for the option
+        self.premium_pattern = r'(?:paid|premium|bought|cost|price)[^\d]+([\d]+(?:\.[\d]+)?)'
+        
+        # Extract strike price with optional $ sign, ensure we don't match Discord IDs
+        self.strike_pattern = r'(?<!\d)(?:\$)?(\d+(?:\.\d+)?)(?!\d)'
+        
+        # Extract expiration date with various formats
+        self.expiration_pattern = r'(?:expir(?:ing|es?)|exp|dated?)[: ]+((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d{1,2}(?:[,]? \d{4})?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)'
+        
+        # Extract target price
+        self.target_pattern = r'(?:target|price target)[^\d]+([\d]+(?:\.[\d]+)?)'
+        
+        # Extract number of contracts
+        self.contracts_pattern = r'(\d+)(?:\s+)?(?:contracts?|positions?|options?)'
+        
+        # Extract trade horizon
+        self.trade_horizon_pattern = r'\b(scalp|day[ -]?trad[a-z]+|swing[ -]?trad[a-z]+|short[ -]term|medium[ -]term|long[ -]term|leaps?|position)\b'
+        
+    def preprocess_text(self, text):
+        """Preprocess text for analysis"""
+        # Convert to lowercase
+        text = text.lower()
+        # Tokenize
+        tokens = word_tokenize(text)
+        # Remove stopwords and punctuation
+        filtered_tokens = [token for token in tokens if token.isalnum() and token not in self.stop_words]
+        return filtered_tokens
+    
+    def identify_request_type(self, tokens):
+        """Identify the type of request from the tokens"""
+        # Count keyword matches for each request type
+        option_price_count = sum(1 for token in tokens if token in self.option_price_keywords)
+        stop_loss_count = sum(1 for token in tokens if token in self.stop_loss_keywords)
+        unusual_activity_count = sum(1 for token in tokens if token in self.unusual_activity_keywords)
+        
+        # Determine the request type based on the highest count
+        if option_price_count > stop_loss_count and option_price_count > unusual_activity_count:
+            return 'option_price'
+        elif stop_loss_count > option_price_count and stop_loss_count > unusual_activity_count:
+            return 'stop_loss'
+        elif unusual_activity_count > option_price_count and unusual_activity_count > stop_loss_count:
+            return 'unusual_activity'
+        else:
+            # If counts are equal or no significant matches, look for specific patterns
+            text = ' '.join(tokens)
+            if 'stop' in text and ('loss' in text or 'exit' in text):
+                return 'stop_loss'
+            elif ('option' in text or 'call' in text or 'put' in text) and ('price' in text or 'worth' in text):
+                return 'option_price'
+            elif ('unusual' in text or 'whale' in text) and 'activity' in text:
+                return 'unusual_activity'
+            else:
+                return 'unknown'
+    
+    def extract_info(self, text):
+        """Extract relevant information from text using patterns"""
+        info = {}
+        
+        # Extract ticker symbol - find all matches and filter common words
+        ticker_matches = re.findall(self.ticker_pattern, text)
+        common_words = {'FOR', 'THE', 'AND', 'ITS', 'THIS', 'LIKE', 'WITH', 'FROM', 'HAVE', 'THAT'}
+        
+        filtered_tickers = [ticker for ticker in ticker_matches if ticker not in common_words]
+        if filtered_tickers:
+            info['ticker'] = filtered_tickers[0]
+        
+        # Extract option type
+        option_type_match = re.search(self.option_type_pattern, text.lower())
+        if option_type_match:
+            option_type = option_type_match.group(1).lower()
+            # Normalize to just "call" or "put"
+            info['option_type'] = 'call' if option_type.startswith('call') else 'put'
+        
+        # Extract premium
+        premium_match = re.search(self.premium_pattern, text.lower())
+        if premium_match:
+            try:
+                info['premium'] = float(premium_match.group(1))
+            except ValueError:
+                pass
+        
+        # Extract strike price
+        # We need to be careful with strike price extraction to avoid false positives
+        strike_matches = re.findall(self.strike_pattern, text)
+        if strike_matches:
+            # Filter strikes by context - look for "strike", "$", or "call/put" nearby
+            strike_candidates = []
+            for i, strike in enumerate(strike_matches):
+                try:
+                    strike_val = float(strike)
+                    strike_pos = text.find(strike)
+                    context = text[max(0, strike_pos-20):min(len(text), strike_pos+20)]
+                    
+                    if ('strike' in context.lower() or '$' in context or 
+                        'call' in context.lower() or 'put' in context.lower()):
+                        strike_candidates.append(strike_val)
+                except ValueError:
+                    continue
+            
+            if strike_candidates:
+                info['strike'] = strike_candidates[0]
+            elif strike_matches:
+                # Fallback to first match if no good context
+                try:
+                    info['strike'] = float(strike_matches[0])
+                except ValueError:
+                    pass
+        
+        # Extract expiration date
+        expiration_match = re.search(self.expiration_pattern, text.lower())
+        if expiration_match:
+            # Store raw expiration text for now, we'll parse it later
+            info['expiration_raw'] = expiration_match.group(1)
+        
+        # Extract target price
+        target_match = re.search(self.target_pattern, text.lower())
+        if target_match:
+            try:
+                info['target_price'] = float(target_match.group(1))
+            except ValueError:
+                pass
+        
+        # Extract number of contracts
+        contracts_match = re.search(self.contracts_pattern, text.lower())
+        if contracts_match:
+            try:
+                info['contracts'] = int(contracts_match.group(1))
+            except ValueError:
+                pass
+        else:
+            # Default to 1 contract
+            info['contracts'] = 1
+        
+        # Extract trade horizon
+        horizon_match = re.search(self.trade_horizon_pattern, text.lower())
+        if horizon_match:
+            horizon = horizon_match.group(1).lower()
+            # Normalize trade horizon
+            if 'scalp' in horizon or 'day' in horizon:
+                info['trade_horizon'] = 'scalp'
+            elif 'swing' in horizon:
+                info['trade_horizon'] = 'swing'
+            elif 'long' in horizon or 'leap' in horizon:
+                info['trade_horizon'] = 'longterm'
+            else:
+                info['trade_horizon'] = 'unknown'
+        
+        return info
+    
+    def parse_relative_dates(self, text, info):
+        """Parse relative date references like 'next Friday', 'tomorrow', etc."""
+        if 'expiration_raw' not in info:
+            return info
+        
+        raw_date = info['expiration_raw'].lower()
+        today = datetime.datetime.now()
+        
+        # Try to parse explicit month and day formats first
+        try:
+            # For formats like "Jan 21" or "January 21, 2023"
+            date_parts = raw_date.split()
+            if len(date_parts) >= 2:
+                month_str = date_parts[0][:3]  # Take first 3 chars of month
+                day_str = ''.join(filter(str.isdigit, date_parts[1]))  # Extract digits from day part
+                
+                # Map month abbreviation to month number
+                month_map = {
+                    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+                }
+                
+                if month_str in month_map and day_str:
+                    month = month_map[month_str]
+                    day = int(day_str)
+                    
+                    # Determine year - if date is in the past, assume next year
+                    year = today.year
+                    if month < today.month or (month == today.month and day < today.day):
+                        year += 1
+                        
+                    # If year is explicitly mentioned, use that
+                    if len(date_parts) >= 3 and date_parts[2].isdigit():
+                        explicit_year = int(date_parts[2])
+                        if explicit_year < 100:  # Handle 2-digit years
+                            explicit_year += 2000
+                        year = explicit_year
+                        
+                    expiration_date = datetime.datetime(year, month, day)
+                    info['expiration'] = expiration_date.strftime('%Y-%m-%d')
+                    return info
+        except Exception as e:
+            print(f"Error parsing explicit date: {str(e)}")
+        
+        # Try to parse numerical formats like MM/DD or MM/DD/YY
+        try:
+            if '/' in raw_date or '-' in raw_date:
+                # Replace both slashes and hyphens with slashes for consistent parsing
+                normalized_date = raw_date.replace('-', '/')
+                date_parts = normalized_date.split('/')
+                
+                if len(date_parts) >= 2:
+                    month = int(date_parts[0])
+                    day = int(date_parts[1])
+                    
+                    # Determine year
+                    year = today.year
+                    if len(date_parts) >= 3:
+                        year_str = date_parts[2]
+                        if len(year_str) <= 2:
+                            year = 2000 + int(year_str)
+                        else:
+                            year = int(year_str)
+                    elif month < today.month or (month == today.month and day < today.day):
+                        year += 1
+                        
+                    expiration_date = datetime.datetime(year, month, day)
+                    info['expiration'] = expiration_date.strftime('%Y-%m-%d')
+                    return info
+        except Exception as e:
+            print(f"Error parsing numeric date: {str(e)}")
+            
+        # Handle relative dates
+        try:
+            if 'tomorrow' in raw_date:
+                expiration_date = today + datetime.timedelta(days=1)
+                info['expiration'] = expiration_date.strftime('%Y-%m-%d')
+            elif 'next week' in raw_date:
+                expiration_date = today + datetime.timedelta(days=7)
+                info['expiration'] = expiration_date.strftime('%Y-%m-%d')
+            elif 'next friday' in raw_date:
+                # Calculate days until next Friday
+                days_until_friday = (4 - today.weekday()) % 7
+                if days_until_friday == 0:  # If today is Friday, get next Friday
+                    days_until_friday = 7
+                expiration_date = today + datetime.timedelta(days=days_until_friday)
+                info['expiration'] = expiration_date.strftime('%Y-%m-%d')
+            elif 'this friday' in raw_date:
+                # Calculate days until this Friday
+                days_until_friday = (4 - today.weekday()) % 7
+                expiration_date = today + datetime.timedelta(days=days_until_friday)
+                info['expiration'] = expiration_date.strftime('%Y-%m-%d')
+        except Exception as e:
+            print(f"Error parsing relative date: {str(e)}")
+            
+        # If we couldn't parse the date, remove the raw field
+        if 'expiration' not in info:
+            info.pop('expiration_raw', None)
+            
+        return info
+    
+    def parse_query(self, query):
+        """Parse the user query to identify the request type and extract information"""
+        # Preprocess text
+        tokens = self.preprocess_text(query)
+        
+        # Identify request type
+        request_type = self.identify_request_type(tokens)
+        
+        # Extract information
+        info = self.extract_info(query)
+        
+        # Parse relative dates if present
+        info = self.parse_relative_dates(query, info)
+        
+        # Add request type to the info
+        info['request_type'] = request_type
+        
+        return info
+
+class OptionsBot:
+    """Main Options Bot class to handle user requests"""
+    
+    def __init__(self):
+        # Initialize NLP processor
+        self.nlp = OptionsBotNLP()
+        
+        # Approved channels (only respond in these)
+        # In production, store this list in a database or configuration file
+        self.approved_channels = ["blank1"]
+        
+    def get_help_instructions(self):
+        """Return help instructions for interacting with the bot"""
+        help_text = """**Options Bot Help**
+
+I'm an Options Analysis bot that can help you with options trading information. Here's what I can do:
+
+**1️⃣ Option Price Estimation**
+Example: "@OptionsBot What's the price of AAPL $180 calls expiring next Friday?"
+
+**2️⃣ Stop Loss Recommendations**
+Example: "@OptionsBot What's a good stop loss for my TSLA $240 calls expiring Aug 18?"
+
+**3️⃣ Unusual Options Activity**
+Example: "@OptionsBot Show me unusual options activity for MSFT"
+
+To use me, just mention me (@OptionsBot) and ask your question in natural language.
+I work best when you provide specific details about your options (ticker, strike price, expiration date, etc.)"""
+        
+        return help_text
+        
+    async def handle_message(self, message):
+        """Process user message and generate a response using consistent Discord embeds"""
+        import discord
+        
+        # Check if message was sent in an approved channel
+        if message.channel.name not in self.approved_channels:
+            return None
+        
+        # Get raw message content
+        content = message.content.strip()
+        
+        # Check for client mention
+        client = message.guild.get_member(int(os.getenv('BOT_USER_ID')))
+        
+        if client.mentioned_in(message) or client.display_name.lower() in content.lower():
+            # Remove the mention
+            content = content.replace(f'<@{client.id}>', '').strip()
+            content = re.sub(r'@' + re.escape(client.display_name), '', content, flags=re.IGNORECASE).strip()
+            
+            # Parse the query
+            info = self.nlp.parse_query(content)
+            
+            # Process the request
+            if info['request_type'] == 'option_price':
+                return await self.handle_option_price_request(message, info)
+            elif info['request_type'] == 'stop_loss':
+                return await self.handle_stop_loss_request(message, info)
+            elif info['request_type'] == 'unusual_activity':
+                return await self.handle_unusual_activity_request(message, info)
+            else:
+                # Default response for unknown request type
+                return discord.Embed(
+                    title="I'm not sure what you're asking",
+                    description=f"I understand requests for options pricing, stop loss recommendations, and unusual options activity. Try one of these example questions:\n\n1. What's the price of AAPL $180 calls expiring next Friday?\n2. What's a good stop loss for my TSLA $240 calls?\n3. Show me unusual options activity for MSFT",
+                    color=0x3498DB  # Blue color
+                )
+        
+        return None
+    
+    async def handle_option_price_request(self, message, info):
+        """Handle requests for option price estimations using Discord embeds for better visual styling"""
+        try:
+            # Check if we have the minimum required information
+            if 'ticker' not in info or not info['ticker']:
+                # Create an error embed with clear explanation
+                import discord
+                missing_embed = discord.Embed(
+                    title="Missing Stock Ticker",
+                    description="I need a stock ticker symbol to calculate option prices. Please include a stock symbol like AAPL, MSFT, or TSLA in your request.",
+                    color=0xFF0000  # Red for errors
+                )
+                
+                # Add example field
+                example = "What's the price of AAPL $180 calls expiring next Friday?"
+                missing_embed.add_field(
+                    name="Example Query:",
+                    value=f"*{example}*",
+                    inline=False
+                )
+                
+                missing_embed.set_footer(text="For more help, ask 'What can you do?'")
+                return missing_embed
+            
+            ticker = info['ticker']
+            
+            # Check for option type
+            if 'option_type' not in info or not info['option_type']:
+                # Create an error embed for missing option type
+                import discord
+                missing_embed = discord.Embed(
+                    title="Missing Option Type",
+                    description="Please specify whether you're asking about call options or put options.",
+                    color=0xFF0000  # Red for errors
+                )
+                
+                # Add example field
+                example = f"What's the price of {ticker} $150 calls expiring next Friday?"
+                missing_embed.add_field(
+                    name="Example Query:",
+                    value=f"*{example}*",
+                    inline=False
+                )
+                
+                missing_embed.set_footer(text="For more help, ask 'What can you do?'")
+                return missing_embed
+            
+            # Check for strike price
+            if 'strike' not in info or not info['strike']:
+                # Create an error embed for missing strike price
+                import discord
+                missing_embed = discord.Embed(
+                    title="Missing Strike Price",
+                    description=f"Please specify the strike price for your {ticker} {info['option_type']} option.",
+                    color=0xFF0000  # Red for errors
+                )
+                
+                # Add example field
+                example = f"What's the price of {ticker} $150 {info['option_type']}s expiring next Friday?"
+                missing_embed.add_field(
+                    name="Example Query:",
+                    value=f"*{example}*",
+                    inline=False
+                )
+                
+                missing_embed.set_footer(text="For more help, ask 'What can you do?'")
+                return missing_embed
+            
+            # Get stock data
+            import yfinance as yf
+            stock = yf.Ticker(ticker)
+            
+            # Get available expiration dates
+            try:
+                expiration_dates = stock.options
+                if not expiration_dates:
+                    # Create an error embed for no options available
+                    import discord
+                    error_embed = discord.Embed(
+                        title=f"No Options Available",
+                        description=f"No options data found for {ticker}.",
+                        color=0xFF0000  # Red for errors
+                    )
+                    error_embed.set_footer(text="Please check the ticker symbol and try again")
+                    return error_embed
+            except Exception as e:
+                # Create an error embed for failure to fetch data
+                import discord
+                error_embed = discord.Embed(
+                    title=f"Error Fetching Option Chain",
+                    description=f"Error retrieving options data for {ticker}: {str(e)}",
+                    color=0xFF0000  # Red for errors
+                )
+                error_embed.set_footer(text="Please check your internet connection and try again")
+                return error_embed
+            
+            # Get the expiration date
+            selected_expiration = None
+            
+            if 'expiration' in info and info['expiration']:
+                # Try to find the closest expiration date from available options
+                target_date = info['expiration']
+                
+                # Convert target_date string to datetime object
+                try:
+                    from datetime import datetime
+                    target_datetime = datetime.strptime(target_date, '%Y-%m-%d')
+                    
+                    # Find the closest expiration date
+                    closest_date = None
+                    min_difference = float('inf')
+                    
+                    for exp_date in expiration_dates:
+                        exp_datetime = datetime.strptime(exp_date, '%Y-%m-%d')
+                        difference = abs((exp_datetime - target_datetime).days)
+                        
+                        if difference < min_difference:
+                            min_difference = difference
+                            closest_date = exp_date
+                    
+                    if closest_date:
+                        selected_expiration = closest_date
+                except Exception as e:
+                    print(f"Error finding closest expiration: {str(e)}")
+            
+            # If no valid expiration specified, use the next available expiration date
+            if not selected_expiration and expiration_dates:
+                selected_expiration = expiration_dates[0]
+            
+            # If we have an expiration date, fetch the option chain
+            if selected_expiration:
+                try:
+                    option_chain = stock.option_chain(selected_expiration)
+                    
+                    # Get the right chain based on option type
+                    if info['option_type'].lower() == 'call':
+                        chain = option_chain.calls
+                    else:
+                        chain = option_chain.puts
+                    
+                    # Find the option with the closest strike price
+                    target_strike = info['strike']
+                    closest_option = None
+                    min_difference = float('inf')
+                    
+                    for _, option in chain.iterrows():
+                        difference = abs(option['strike'] - target_strike)
+                        if difference < min_difference:
+                            min_difference = difference
+                            closest_option = option
+                    
+                    # If we found a matching option, create a response
+                    if closest_option is not None:
+                        # Get current stock price
+                        current_price = stock.info.get('currentPrice', stock.history(period='1d')['Close'].iloc[-1])
+                        
+                        # Create a Discord embed for the response
+                        import discord
+                        
+                        # Choose color based on option type
+                        if info['option_type'].lower() == 'call':
+                            embed_color = 0x00FF00  # Green for calls
+                        else:
+                            embed_color = 0xFF0000  # Red for puts
+                        
+                        embed = discord.Embed(
+                            title=f"{ticker} {info['option_type'].upper()} ${closest_option['strike']:.2f} Expiring {selected_expiration}",
+                            description=f"**Current Stock Price:** ${current_price:.2f}",
+                            color=embed_color
+                        )
+                        
+                        # Add option details
+                        embed.add_field(
+                            name="Option Details",
+                            value=f"**Last Price:** ${closest_option['lastPrice']:.2f}\n"
+                                 f"**Bid:** ${closest_option['bid']:.2f}\n"
+                                 f"**Ask:** ${closest_option['ask']:.2f}\n"
+                                 f"**Volume:** {int(closest_option['volume']) if not np.isnan(closest_option['volume']) else 'N/A'}\n"
+                                 f"**Open Interest:** {int(closest_option['openInterest']) if not np.isnan(closest_option['openInterest']) else 'N/A'}",
+                            inline=True
+                        )
+                        
+                        # Add option analysis
+                        in_the_money = (info['option_type'].lower() == 'call' and current_price > closest_option['strike']) or \
+                                      (info['option_type'].lower() == 'put' and current_price < closest_option['strike'])
+                        
+                        # Calculate moneyness percentage
+                        moneyness_pct = abs(current_price - closest_option['strike']) / current_price * 100
+                        
+                        status = "In the Money 💰" if in_the_money else "Out of the Money 📉"
+                        
+                        # Calculate break-even price
+                        if info['option_type'].lower() == 'call':
+                            break_even = closest_option['strike'] + closest_option['lastPrice']
+                            break_even_pct = (break_even - current_price) / current_price * 100
+                        else:
+                            break_even = closest_option['strike'] - closest_option['lastPrice']
+                            break_even_pct = (current_price - break_even) / current_price * 100
+                        
+                        embed.add_field(
+                            name="Option Analysis",
+                            value=f"**Status:** {status}\n"
+                                 f"**Moneyness:** {moneyness_pct:.2f}%\n"
+                                 f"**Break-Even:** ${break_even:.2f}\n"
+                                 f"**Required Move:** {break_even_pct:.2f}%\n"
+                                 f"**Days to Expiry:** {(datetime.datetime.strptime(selected_expiration, '%Y-%m-%d') - datetime.datetime.now()).days} days",
+                            inline=True
+                        )
+                        
+                        # Calculate profit/loss for contract(s)
+                        num_contracts = info.get('contracts', 1)
+                        contract_cost = closest_option['lastPrice'] * 100 * num_contracts
+                        
+                        embed.add_field(
+                            name=f"Contract Value ({num_contracts} contract{'s' if num_contracts > 1 else ''})",
+                            value=f"**Cost:** ${contract_cost:.2f}\n"
+                                 f"**Per Contract:** ${closest_option['lastPrice'] * 100:.2f}",
+                            inline=False
+                        )
+                        
+                        # Add risk warning 
+                        embed.add_field(
+                            name="⚠️ Risk Warning",
+                            value="Options trading involves substantial risk of loss. This information is for educational purposes only.",
+                            inline=False
+                        )
+                        
+                        # Add footer with timestamp
+                        from datetime import datetime
+                        embed.set_footer(text=f"Data as of {datetime.now().strftime('%Y-%m-%d %H:%M')} | Prices may change quickly during market hours")
+                        
+                        return embed
+                    else:
+                        # Create an error embed for option not found
+                        import discord
+                        error_embed = discord.Embed(
+                            title=f"Option Not Found",
+                            description=f"No {info['option_type']} option found with strike price ${info['strike']} for {ticker} expiring on {selected_expiration}.",
+                            color=0xFF0000  # Red for errors
+                        )
+                        
+                        # Suggest available strikes
+                        if not chain.empty:
+                            available_strikes = sorted(chain['strike'].unique())[:5]  # Get first 5 strikes
+                            strikes_text = '\n'.join([f"${strike:.2f}" for strike in available_strikes])
+                            
+                            error_embed.add_field(
+                                name="Available Strikes (first 5)",
+                                value=strikes_text,
+                                inline=False
+                            )
+                            
+                            # Show available expirations
+                            if len(expiration_dates) > 1:
+                                expirations_text = '\n'.join(expiration_dates[:5])  # Show first 5 expiration dates
+                                
+                                error_embed.add_field(
+                                    name="Available Expiration Dates (first 5)",
+                                    value=expirations_text,
+                                    inline=False
+                                )
+                        
+                        error_embed.set_footer(text="Try again with a different strike price or expiration date")
+                        return error_embed
+                except Exception as e:
+                    # Create an error embed for fetch failure
+                    import discord
+                    error_embed = discord.Embed(
+                        title=f"Error Calculating Option Price",
+                        description=f"Error retrieving option data for {ticker} {info['option_type']} ${info['strike']} expiring {selected_expiration}: {str(e)}",
+                        color=0xFF0000  # Red for errors
+                    )
+                    error_embed.set_footer(text="Please check your inputs and try again")
+                    return error_embed
+            else:
+                # Create an error embed for no expiration date
+                import discord
+                error_embed = discord.Embed(
+                    title=f"No Expiration Date Available",
+                    description=f"No option expiration dates available for {ticker}.",
+                    color=0xFF0000  # Red for errors
+                )
+                error_embed.set_footer(text="Please check the ticker symbol and try again")
+                return error_embed
+                
+        except Exception as e:
+            # Create a generic error embed
+            import discord
+            error_embed = discord.Embed(
+                title="Error Processing Request",
+                description=f"An error occurred while processing your request: {str(e)}",
+                color=0xFF0000  # Red for errors
+            )
+            error_embed.set_footer(text="Please try again with a different query")
+            return error_embed
+    
+    async def handle_stop_loss_request(self, message, info):
+        """Handle requests for stop loss recommendations using Discord embeds for better visual styling"""
+        print("DEBUG: Starting handle_stop_loss_request method")
+        print(f"DEBUG: Received info: {info}")
+        print("DEBUG: Enhanced debugging enabled for stop_loss_request")
+        
+        try:
+            import inspect
+            print(f"DEBUG: Current method at line {inspect.currentframe().f_lineno}")
+            
+            if 'ticker' not in info or not info['ticker']:
+                # Return error for missing ticker
+                print("DEBUG: Missing ticker in info")
+                import discord
+                return discord.Embed(
+                    title="Missing Ticker Symbol",
+                    description="Please provide a ticker symbol for your stop loss recommendation.",
+                    color=0xFF0000  # Red for error
+                )
+            
+            ticker = info['ticker']
+            print(f"DEBUG: Processing ticker: {ticker}")
+            
+            # Get stock data
+            import yfinance as yf
+            stock = yf.Ticker(ticker)
+            
+            # Get basic stock price
+            try:
+                # Try to get current price from info
+                current_price = stock.info.get('currentPrice')
+                
+                # If that fails, get it from history
+                if current_price is None:
+                    current_price = stock.history(period='1d')['Close'].iloc[-1]
+            except Exception as e:
+                print(f"Error getting stock price: {str(e)}")
+                # Fallback to a default price for testing
+                import discord
+                return discord.Embed(
+                    title="Error Getting Stock Data",
+                    description=f"Could not retrieve current price data for {ticker}. Please try again later.",
+                    color=0xFF0000  # Red for error
+                )
+            
+            # Get comprehensive stop loss recommendations based on expiration date
+            print(f"DEBUG: Getting stop loss recommendations with expiration: {info['expiration']}")
+            from technical_analysis import get_stop_loss_recommendation
+            stop_loss_recommendations = get_stop_loss_recommendation(
+                stock, 
+                current_price, 
+                info['option_type'], 
+                info['expiration']
+            )
+            print(f"DEBUG: Raw stop_loss_recommendations: {stop_loss_recommendations}")
+            
+            # Get the primary recommendation which is most appropriate for the option expiration
+            primary_recommendation = stop_loss_recommendations.get('primary', {})
+            
+            # If trade_horizon is explicitly set in info, use it, otherwise get it from recommendations
+            if info.get('trade_horizon'):
+                print(f"DEBUG: Using explicitly provided trade_horizon: {info['trade_horizon']}")
+                trade_horizon = info['trade_horizon']
+            else:
+                # Determine trade horizon if available 
+                trade_horizon = stop_loss_recommendations.get('trade_horizon', 'unknown')
+                print(f"DEBUG: Using trade_horizon from recommendations: {trade_horizon}")
+            
+            # Set the emoji based on the trade horizon
+            if trade_horizon == 'scalp':
+                horizon_emoji = "⚡"
+                horizon_description = "scalp/day trade"
+            elif trade_horizon == 'swing':
+                horizon_emoji = "📈"
+                horizon_description = "swing trade"
+            elif trade_horizon == 'longterm':
+                horizon_emoji = "🌟"
+                horizon_description = "long-term position"
+            else:
+                horizon_emoji = "🛑"
+                horizon_description = "position"
+            
+            # Get option price data for the exact position
+            # We need to get the current price of the option to calculate what it would be worth at the stop loss level
+            try:
+                # Get option chain
+                options = stock.option_chain(info['expiration'])
+                
+                if info['option_type'].lower() == 'call':
+                    chain = options.calls
+                else:
+                    chain = options.puts
+                
+                # Find the option with the exact strike price
+                option = chain[chain['strike'] == info['strike']]
+                
+                current_option_price = None
+                option_greeks = None
+                if not option.empty:
+                    current_option_price = option['lastPrice'].iloc[0]
+                    print(f"Current option price for {ticker} {info['option_type']} ${info['strike']} expiring {info['expiration']}: ${current_option_price}")
+                    
+                    # Get option greeks if we can
+                    from option_calculator import get_option_greeks
+                    try:
+                        option_greeks = get_option_greeks(stock, info['expiration'], info['strike'], info['option_type'])
+                        print(f"Retrieved option Greeks: {option_greeks}")
+                    except Exception as e:
+                        print(f"Error getting option Greeks: {str(e)}")
+                        option_greeks = None
+                else:
+                    print(f"Option with strike {info['strike']} not found in chain")
+            except Exception as e:
+                print(f"Error getting option price data: {str(e)}")
+                current_option_price = None
+                option_greeks = None
+                
+            # Import the functions to calculate option price at stop loss and theta decay
+            from option_calculator import calculate_option_at_stop_loss, calculate_theta_decay, calculate_expiry_theta_decay
+            
+            # Create Discord embed for better visual styling with a colored border
+            import discord
+            
+            # Choose the appropriate color based on trade horizon
+            embed_color = 0x0000FF  # Blue color default for longterm
+
+            if trade_horizon == 'scalp':
+                embed_color = 0xFF5733  # Orange color for scalp trades
+            elif trade_horizon == 'swing':
+                embed_color = 0x00CC00  # Green color for swing trades
+    
+            if trade_horizon == 'scalp':
+                # Red-orange for scalp (short-term, higher risk)
+                embed_color = 0xFF5733
+            elif trade_horizon == 'swing':
+                # Purple for swing trades
+                embed_color = 0x9370DB
+            elif trade_horizon == 'longterm':
+                # Blue for long-term positions
+                embed_color = 0x0099FF
+            else:
+                # Default teal color for unknown trade horizons
+                embed_color = 0x36B37E
+                
+            print(f"DEBUG: Ticker {ticker}, option_type {info['option_type']}, strike {info['strike']}")
+            
+            # Create the embed with title and color
+            embed = discord.Embed(
+                title=f"{horizon_emoji} {ticker} {info['option_type'].upper()} ${info['strike']:.2f} {info['expiration']} {horizon_emoji}",
+                description="",
+                color=embed_color
+            )
+            
+            # Start building the stop loss recommendation content
+            stop_loss_content = f"**Current Stock Price:** ${current_price:.2f}\n"
+            
+            # Add current option price if available
+            if current_option_price is not None:
+                stop_loss_content += f"**Current Option Price:** ${current_option_price:.2f}\n"
+            
+            # Only include the primary recommendation's message
+            if 'recommendation' in primary_recommendation and 'level' in primary_recommendation:
+                stop_loss_level = primary_recommendation['level']
+                
+                if current_option_price is not None:
+                    try:
+                        # Calculate estimated option price at stop loss
+                        print(f"Using ticker: {ticker} for option calculations")
+                        option_at_stop = calculate_option_at_stop_loss(
+                            current_stock_price=current_price, 
+                            stop_loss_price=stop_loss_level, 
+                            strike_price=info['strike'], 
+                            current_option_price=current_option_price, 
+                            expiration_date=info['expiration'], 
+                            option_type=info['option_type'],
+                            ticker_symbol=ticker
+                        )
+                        
+                        option_stop_price = option_at_stop['price']
+                        percent_change = option_at_stop['percent_change']
+                        
+                        # Add to stop loss content for the embed
+                        stop_loss_content += f"• Stock Price Stop Level: ${stop_loss_level:.2f}\n"
+                        stop_loss_content += f"• Option Price at Stop: ${option_stop_price:.2f} (a {abs(percent_change):.1f}% loss)\n"
+                    except Exception as e:
+                        print(f"Error calculating option price at stop loss: {str(e)}")
+                        # Fallback to a simplified estimation
+                        if info['option_type'].lower() == 'call':
+                            price_drop_pct = (current_price - stop_loss_level) / current_price
+                            option_stop_price = current_option_price * (1 - (price_drop_pct * 2.5))  # Options typically move 2-3x stock
+                        else:
+                            price_rise_pct = (stop_loss_level - current_price) / current_price
+                            option_stop_price = current_option_price * (1 - (price_rise_pct * 2.5))
+                        
+                        option_stop_price = max(0, option_stop_price)
+                        percent_change = ((option_stop_price - current_option_price) / current_option_price) * 100
+                        
+                        stop_loss_content += f"• Stock Price Stop Level: ${stop_loss_level:.2f}\n"
+                        stop_loss_content += f"• Option Price at Stop: ${option_stop_price:.2f} (a {abs(percent_change):.1f}% loss)\n"
+                else:
+                    stop_loss_content += f"• Stock Price Stop Level: ${stop_loss_level:.2f}\n"
+            else:
+                stop_loss_content += f"• Stock Price Stop Level: ${primary_recommendation.get('level', current_price * 0.95):.2f}\n"
+                
+            # Add the stop loss recommendation to the embed (non-bolded text)
+            embed.add_field(
+                name="📊 STOP LOSS RECOMMENDATION 📊",
+                value=stop_loss_content,
+                inline=False
+            )
+            
+            print(f"DEBUG: Checking trade timeframes - trade_horizon: {trade_horizon}")
+            print(f"DEBUG: stop_loss_recommendations keys: {list(stop_loss_recommendations.keys())}")
+            
+            # Determine most appropriate timeframe based on given trade_horizon
+            # Force trade_type setting based on trade_horizon if it was explicitly provided
+            if trade_horizon == 'scalp':
+                print("DEBUG: Entering SCALP trade section (explicitly set)")
+                trade_type = "Scalp/Day Trade"
+                print(f"DEBUG: Set trade_type to: {trade_type}")
+            elif trade_horizon == 'swing':
+                print("DEBUG: Entering SWING trade section (explicitly set)")
+                trade_type = "Swing Trade"
+                print(f"DEBUG: Set trade_type to: {trade_type}")
+            elif trade_horizon == 'longterm':
+                print("DEBUG: Entering LONGTERM trade section (explicitly set)")
+                trade_type = "Long-Term Position/LEAP"
+            else:
+                # Fall back to automatic selection based on stop_loss_recommendations
+                if 'scalp' in stop_loss_recommendations and ('expiration' not in info or trade_horizon == 'scalp'):
+                    print("DEBUG: Entering SCALP trade section")
+                    trade_type = "Scalp/Day Trade"
+                    print(f"DEBUG: Set trade_type to: {trade_type}")
+                elif 'swing' in stop_loss_recommendations and ('expiration' not in info or trade_horizon == 'swing' or trade_horizon == 'unknown'):
+                    print("DEBUG: Entering SWING trade section")
+                    print(f"DEBUG: trade_horizon={trade_horizon}, 'expiration' in info={'expiration' in info}, swing in recommendations={'swing' in stop_loss_recommendations}")
+                    trade_type = "Swing Trade"
+                    print(f"DEBUG: Set trade_type to: {trade_type}")
+                elif 'longterm' in stop_loss_recommendations and ('expiration' not in info or trade_horizon == 'longterm' or trade_horizon == 'unknown'):
+                    trade_type = "Long-Term Position/LEAP"
+                else:
+                    trade_type = "General Position"
+            
+            # SECTION 3: Trade Classification with specific title for timeframe
+            response = ""
+            
+            if trade_type == "Scalp/Day Trade":
+                response += f"**🔍 SCALP TRADE STOP LOSS (5-15 min chart) 🔍**\n"
+                # Add scalp trade specific info and warning
+                response += f"• For very short-term options (0-1 days expiry)\n"
+                response += f"• Technical Basis: Breakout candle low with volatility buffer\n\n"
+                response += f"**What happens to your option at the stop level?**\n"
+                response += f"⚠️ This option will likely lose 40-60% of its value if held as gamma increases near stop level.\n"
+                
+                # Add expiry-specific theta decay warning if we have option data and expiration date
+                if current_option_price is not None and option_greeks is not None and 'theta' in option_greeks and info['expiration']:
+                    # Use day-by-day theta decay projection until expiry
+                    try:
+                        theta_decay = calculate_expiry_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            expiration_date=info['expiration'],
+                            max_days=1  # Use daily intervals for scalp trades (1 day at a time)
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error in expiry theta decay for scalp fallback: {str(e)}")
+                        # Fall back to standard theta decay
+                        try:
+                            theta_decay = calculate_theta_decay(
+                                current_option_price=current_option_price,
+                                theta=option_greeks['theta'],
+                                days_ahead=0,
+                                hours_ahead=6
+                            )
+                            
+                            # If we have a significant warning, add it
+                            if theta_decay['warning_status']:
+                                embed.add_field(
+                                    name="⏳ THETA DECAY WARNING ⏳",
+                                    value=theta_decay['warning_message'],
+                                    inline=False
+                                )
+                        except Exception as fallback_error:
+                            print(f"Error in fallback theta decay for scalp: {str(fallback_error)}")
+                elif current_option_price is not None and option_greeks is not None and 'theta' in option_greeks:
+                    # For scalp trades without expiration date, just show hours
+                    try:
+                        theta_decay = calculate_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            days_ahead=0,
+                            hours_ahead=6
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error calculating standard theta decay for scalp: {str(e)}")
+                
+                # Add the response content to the embed's description
+                embed.description = response
+                
+                print("DEBUG: About to return embed from Scalp/Day Trade")
+                print(f"DEBUG: Embed type: {type(embed)}, Has fields: {hasattr(embed, '_fields')}")
+                return embed
+            
+            elif trade_type == "Swing Trade":
+                response += f"**🔍 SWING TRADE STOP LOSS (4H/Daily chart) 🔍**\n"
+                # Add extra lines for swing trade only
+                response += f"• For medium-term options (up to 90 days expiry)\n"
+                response += f"• Technical Basis: Recent support level with ATR-based buffer\n\n"
+                response += f"**What happens to your option at the stop level?**\n"
+                response += f"⚠️ This option will likely lose 60-80% of its value if held due to accelerated delta decay and negative gamma.\n"
+                
+                # Add expiry-specific theta decay warning if we have option data and expiration date
+                if current_option_price is not None and option_greeks is not None and 'theta' in option_greeks and info['expiration']:
+                    # Use day-by-day theta decay projection until expiry
+                    try:
+                        theta_decay = calculate_expiry_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            expiration_date=info['expiration'],
+                            max_days=2  # Use 2-day intervals for swing trades
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error in expiry theta decay for swing trade fallback: {str(e)}")
+                        # Fall back to standard theta decay
+                        try:
+                            theta_decay = calculate_theta_decay(
+                                current_option_price=current_option_price,
+                                theta=option_greeks['theta'],
+                                days_ahead=2,
+                                hours_ahead=0
+                            )
+                            
+                            # If we have a significant warning, add it
+                            if theta_decay['warning_status']:
+                                embed.add_field(
+                                    name="⏳ THETA DECAY WARNING ⏳",
+                                    value=theta_decay['warning_message'],
+                                    inline=False
+                                )
+                        except Exception as fallback_error:
+                            print(f"Error in fallback theta decay for swing: {str(fallback_error)}")
+                elif current_option_price is not None and option_greeks is not None and 'theta' in option_greeks:
+                    # For swing trades without expiration date, show a few days
+                    try:
+                        theta_decay = calculate_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            days_ahead=2,
+                            hours_ahead=0
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error calculating standard theta decay for swing: {str(e)}")
+                
+                # Add the response content to the embed's description
+                embed.description = response
+                
+                print("DEBUG: About to return embed from Swing Trade section")
+                print(f"DEBUG: Embed type: {type(embed)}, Has fields: {hasattr(embed, '_fields')}")
+                
+                # Add risk warning to the embed
+                embed.add_field(
+                    name="⚠️ RISK WARNING ⚠️",
+                    value="Options trading involves substantial risk. Past performance does not guarantee future results. Stop loss levels are estimates only.",
+                    inline=False
+                )
+                
+                # Return the embed
+                return embed
+            
+            elif trade_type == "Long-Term Position/LEAP":
+                response += f"**🔍 LONG-TERM STOP LOSS (Weekly chart) 🔍**\n"
+                # Add long-term specific info and warning
+                response += f"• For long-dated options (3+ months expiry)\n" 
+                response += f"• Technical Basis: Major support level with extended volatility buffer\n\n"
+                response += f"**What happens to your option at the stop level?**\n"
+                response += f"⚠️ This option will likely lose 30-50% of its value if held but it has better chance of recovering compared to short-term options.\n"
+                
+                # Add expiry-specific theta decay warning if we have option data and expiration date
+                if current_option_price is not None and option_greeks is not None and 'theta' in option_greeks and info['expiration']:
+                    # Use day-by-day theta decay projection until expiry
+                    try:
+                        theta_decay = calculate_expiry_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            expiration_date=info['expiration'],
+                            max_days=7  # Use weekly intervals for long-term/LEAPS options
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error in expiry theta decay for long-term trade fallback: {str(e)}")
+                        # Fall back to standard theta decay
+                        try:
+                            theta_decay = calculate_theta_decay(
+                                current_option_price=current_option_price,
+                                theta=option_greeks['theta'],
+                                days_ahead=5,
+                                hours_ahead=0
+                            )
+                            
+                            # If we have a significant warning, add it
+                            if theta_decay['warning_status']:
+                                embed.add_field(
+                                    name="⏳ THETA DECAY WARNING ⏳",
+                                    value=theta_decay['warning_message'],
+                                    inline=False
+                                )
+                        except Exception as fallback_error:
+                            print(f"Error in fallback theta decay for long-term: {str(fallback_error)}")
+                elif current_option_price is not None and option_greeks is not None and 'theta' in option_greeks:
+                    # For long-term trades without expiration date, show standard weekly decay
+                    try:
+                        theta_decay = calculate_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            days_ahead=5,
+                            hours_ahead=0
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error calculating standard theta decay for long-term: {str(e)}")
+                
+                # Add the response content to the embed's description
+                embed.description = response
+                
+                # Add risk warning
+                embed.add_field(
+                    name="⚠️ RISK WARNING ⚠️",
+                    value="Options trading involves substantial risk. Past performance does not guarantee future results. Stop loss levels are estimates only.",
+                    inline=False
+                )
+                
+                print("DEBUG: About to return embed from Long-Term section")
+                return embed
+            
+            else:
+                # General position case
+                response += f"**🔍 GENERAL STOP LOSS RECOMMENDATION 🔍**\n"
+                response += f"• For any option timeframe\n"
+                response += f"• Technical Basis: Default 5% buffer from current price\n\n"
+                response += f"**What happens to your option at the stop level?**\n"
+                response += f"⚠️ Options generally lose 50-70% of their value if the stock hits your stop loss price and you continue to hold the position.\n"
+                
+                # Add expiry-specific theta decay warning if we have option data and expiration date
+                if current_option_price is not None and option_greeks is not None and 'theta' in option_greeks and info['expiration']:
+                    # Use day-by-day theta decay projection until expiry
+                    try:
+                        theta_decay = calculate_expiry_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            expiration_date=info['expiration'],
+                            max_days=5  # Show up to 5 days for general options
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error in expiry theta decay for general trade: {str(e)}")
+                        # Fall back to standard theta decay
+                        try:
+                            theta_decay = calculate_theta_decay(
+                                current_option_price=current_option_price,
+                                theta=option_greeks['theta'],
+                                days_ahead=2,
+                                hours_ahead=0
+                            )
+                            
+                            # If we have a significant warning, add it
+                            if theta_decay['warning_status']:
+                                embed.add_field(
+                                    name="⏳ THETA DECAY WARNING ⏳",
+                                    value=theta_decay['warning_message'],
+                                    inline=False
+                                )
+                        except Exception as fallback_error:
+                            print(f"Error in fallback theta decay for general trade: {str(fallback_error)}")
+                elif current_option_price is not None and option_greeks is not None and 'theta' in option_greeks:
+                    # For general position without expiration date, use an average timeframe of 2 days
+                    try:
+                        theta_decay = calculate_theta_decay(
+                            current_option_price=current_option_price,
+                            theta=option_greeks['theta'],
+                            days_ahead=2,
+                            hours_ahead=0
+                        )
+                        
+                        # If we have a significant warning, add it
+                        if theta_decay['warning_status']:
+                            embed.add_field(
+                                name="⏳ THETA DECAY WARNING ⏳",
+                                value=theta_decay['warning_message'],
+                                inline=False
+                            )
+                    except Exception as e:
+                        print(f"Error calculating standard theta decay: {str(e)}")
+                
+                # Add the response content to the embed's description
+                embed.description = response
+                
+                # Add risk warning
+                embed.add_field(
+                    name="⚠️ RISK WARNING ⚠️",
+                    value="Options trading involves substantial risk. Past performance does not guarantee future results. Stop loss levels are estimates only.",
+                    inline=False
+                )
+                
+                print("DEBUG: About to return embed from General section")
+                return embed
+            
+            # Fallback for any unexpected case - should never reach here
+            # But if we do, return a basic embed
+            from datetime import datetime
+            embed.add_field(
+                name="⚠️ RISK WARNING ⚠️",
+                value="Options trading involves substantial risk. Past performance does not guarantee future results. Stop loss levels are estimates only.",
+                inline=False
+            )
+            
+            # Add footer to the embed
+            embed.set_footer(text=f"Data as of {datetime.now().strftime('%Y-%m-%d %H:%M')} | Prices may change quickly during market hours")
+        
+            # Return the embed instead of the string response
+            print("DEBUG: Fallback code reached - returning default embed")
+            return embed
+        
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"DEBUG: Error in stop loss recommendation: {str(e)}")
+            print(f"DEBUG: Full traceback:\n{error_details}")
+            print(f"DEBUG: Exception type: {type(e)}")
+            
+            # Create a simple error embed with defensive code
+            try:
+                import discord
+                error_embed = discord.Embed(
+                    title="Stop Loss Calculation Error",
+                    description=f"Sorry, I encountered an error while calculating your stop loss recommendation: {str(e)}\n\nPlease try again with a different ticker or option details.",
+                    color=0xFF0000  # Red color for error
+                )
+                return error_embed
+            except Exception as embed_error:
+                print(f"Error creating error embed: {str(embed_error)}")
+                # Since we can't create an embed, create a mock object with a description for testing
+                class MockEmbed:
+                    def __init__(self, description, title=None, color=None):
+                        self.description = description
+                        self.title = title or "Stop Loss Calculation Error"
+                        self.color = color or 0xFF0000  # Red by default
+                        self.fields = []
+                        
+                    def add_field(self, name="", value="", inline=False):
+                        self.fields.append({"name": name, "value": value, "inline": inline})
+                        return self
+                        
+                    def set_footer(self, text=""):
+                        self.footer = {"text": text}
+                        return self
+                
+                error_message = (
+                    f"Sorry, I encountered an error while calculating your stop loss recommendation: {str(e)}\n\n"
+                    f"Please try again with a different ticker or option details."
+                )
+                
+                # Create a more complete mock object
+                mock_embed = MockEmbed(
+                    description=error_message,
+                    title="Stop Loss Calculation Error",
+                    color=0xFF0000
+                )
+                
+                # Add more mock data to make it look like a full response
+                mock_embed.add_field(
+                    name="Troubleshooting Tips",
+                    value="• Check that the stock ticker is correct\n• Verify the option details (strike, expiry)",
+                    inline=False
+                )
+                
+                from datetime import datetime
+                mock_embed.set_footer(text="Data as of " + datetime.now().strftime("%Y-%m-%d %H:%M"))
+                
+                return mock_embed
+    
+    async def show_available_options(self, ticker, stock):
+        """Show available options for a stock ticker using Discord embeds for consistent styling"""
+        try:
+            # Import discord for embeds
+            import discord
+            from datetime import datetime
+            
+            # Get available expirations
+            expirations = stock.options
+            
+            if not expirations:
+                # Create an error embed for no options available
+                error_embed = discord.Embed(
+                    title=f"No Options Available",
+                    description=f"No options data found for {ticker}.",
+                    color=0xFF0000  # Red for errors
+                )
+                error_embed.set_footer(text="Try a different ticker symbol")
+                error_embed.timestamp = datetime.now()
+                return error_embed
+            
+            # Get current stock price
+            current_price = stock.info.get('currentPrice', stock.history(period='1d')['Close'].iloc[-1])
+            
+            # Create the options data embed with teal color for brand consistency
+            options_embed = discord.Embed(
+                title=f"📈 Options Available for {ticker}",
+                description=f"**Current Stock Price:** ${current_price:.2f}",
+                color=0x1ABC9C  # Teal for brand consistency
+            )
+            
+            # Create a list of expiration dates
+            expiry_text = ""
+            # Limit to first 10 expiration dates to avoid too long messages
+            for i, expiry in enumerate(expirations[:10]):
+                expiry_text += f"• {expiry}\n"
+            
+            # If there are more expirations, note how many more
+            if len(expirations) > 10:
+                expiry_text += f"• ... and {len(expirations) - 10} more"
+                
+            options_embed.add_field(
+                name="Available Expiration Dates",
+                value=expiry_text,
+                inline=False
+            )
+            
+            # Get strikes for the closest expiration date
+            closest_expiry = expirations[0]
+            
+            try:
+                option_chain = stock.option_chain(closest_expiry)
+                
+                # Get strikes for calls
+                call_strikes = sorted(option_chain.calls['strike'].unique())
+                
+                # Get strikes for puts
+                put_strikes = sorted(option_chain.puts['strike'].unique())
+                
+                # Find closest strikes to current price for both calls and puts
+                closest_call_strike = min(call_strikes, key=lambda x: abs(x - current_price))
+                closest_put_strike = min(put_strikes, key=lambda x: abs(x - current_price))
+                
+                # Find the ATM call and put prices
+                atm_call = option_chain.calls[option_chain.calls['strike'] == closest_call_strike]['lastPrice'].iloc[0]
+                atm_put = option_chain.puts[option_chain.puts['strike'] == closest_put_strike]['lastPrice'].iloc[0]
+                
+                # Add this data to the embed
+                options_embed.add_field(
+                    name=f"Example - {closest_expiry} (closest to ATM)",
+                    value=f"**ATM Call Option:** Strike ${closest_call_strike:.2f} @ ${atm_call:.2f}\n"
+                         f"**ATM Put Option:** Strike ${closest_put_strike:.2f} @ ${atm_put:.2f}",
+                    inline=False
+                )
+            except Exception as e:
+                options_embed.add_field(
+                    name="Strike Price Error",
+                    value=f"Could not retrieve strike prices: {str(e)}",
+                    inline=False
+                )
+            
+            # Add instructions on how to get more specific data
+            options_embed.add_field(
+                name="Get Specific Option Details",
+                value="To get pricing for a specific option, use:\n"
+                     f"*@OptionsBot What's the price of {ticker} $XYZ calls expiring {expirations[0]}?*\n"
+                     f"Replace $XYZ with your desired strike price.",
+                inline=False
+            )
+            
+            # Add footer
+            options_embed.set_footer(text=f"Data as of {datetime.now().strftime('%Y-%m-%d %H:%M')} | Prices may change quickly during market hours")
+            options_embed.timestamp = datetime.now()
+            
+            return options_embed
+            
+        except Exception as e:
+            import discord
+            error_embed = discord.Embed(
+                title=f"Error Retrieving Options Data",
+                description=f"An error occurred while retrieving options data for {ticker}: {str(e)}",
+                color=0xFF0000  # Red for errors
+            )
+            error_embed.set_footer(text="Please try again with a different ticker")
+            from datetime import datetime
+            error_embed.timestamp = datetime.now()
+            return error_embed
+    
+    async def handle_unusual_activity_request(self, message, info):
+        """Handle requests for unusual options activity using Discord embeds for better visual styling"""
+        try:
+            # Check if we have the minimum required information
+            if 'ticker' not in info or not info['ticker']:
+                # Create an error embed with clear explanation
+                import discord
+                missing_embed = discord.Embed(
+                    title="Missing Stock Ticker",
+                    description="I need a stock ticker symbol to check for unusual options activity. Please include a stock symbol like AAPL, MSFT, or TSLA in your request.",
+                    color=0xFF0000  # Red for errors
+                )
+                
+                # Add example field
+                example = "Show me unusual options activity for AAPL"
+                missing_embed.add_field(
+                    name="Example Query:",
+                    value=f"*{example}*",
+                    inline=False
+                )
+                
+                missing_embed.set_footer(text="For more help, ask 'What can you do?'")
+                return missing_embed
+            
+            ticker = info['ticker']
+            
+            # Get stock data
+            import yfinance as yf
+            stock = yf.Ticker(ticker)
+            
+            # Get basic stock price
+            try:
+                # Try to get current price from info
+                current_price = stock.info.get('currentPrice')
+                
+                # If that fails, get it from history
+                if current_price is None:
+                    current_price = stock.history(period='1d')['Close'].iloc[-1]
+            except Exception as e:
+                print(f"Error getting stock price: {str(e)}")
+                # Create an error embed
+                import discord
+                error_embed = discord.Embed(
+                    title="Error Getting Stock Data",
+                    description=f"Could not retrieve current price data for {ticker}. Please try again later.",
+                    color=0xFF0000  # Red for errors
+                )
+                error_embed.set_footer(text="This may be due to a network issue or an invalid ticker symbol")
+                return error_embed
+            
+            # Get available expirations
+            try:
+                expirations = stock.options
+                
+                if not expirations:
+                    # Create an error embed for no options available
+                    import discord
+                    error_embed = discord.Embed(
+                        title=f"No Options Available",
+                        description=f"No options data found for {ticker}.",
+                        color=0xFF0000  # Red for errors
+                    )
+                    error_embed.set_footer(text="Try a different ticker symbol")
+                    return error_embed
+            except Exception as e:
+                # Create an error embed
+                import discord
+                error_embed = discord.Embed(
+                    title="Error Getting Options Data",
+                    description=f"Could not retrieve options data for {ticker}: {str(e)}",
+                    color=0xFF0000  # Red for errors
+                )
+                error_embed.set_footer(text="This may be due to a network issue or an invalid ticker symbol")
+                return error_embed
+            
+            # Define threshold for unusual activity
+            volume_oi_ratio_threshold = 0.5  # Volume should be at least 50% of open interest
+            min_volume = 100  # At least 100 contracts traded
+            min_open_interest = 50  # At least 50 open interest
+            
+            unusual_calls = []
+            unusual_puts = []
+            
+            # Check the first 5 expiration dates for unusual activity
+            for expiry in expirations[:5]:
+                try:
+                    option_chain = stock.option_chain(expiry)
+                    
+                    # Process calls
+                    for _, call in option_chain.calls.iterrows():
+                        volume = call['volume'] if not np.isnan(call['volume']) else 0
+                        open_interest = call['openInterest'] if not np.isnan(call['openInterest']) else 0
+                        
+                        if volume >= min_volume and open_interest >= min_open_interest and volume / max(1, open_interest) >= volume_oi_ratio_threshold:
+                            # Calculate moneyness
+                            moneyness = (current_price - call['strike']) / current_price * 100
+                            
+                            unusual_calls.append({
+                                'expiry': expiry,
+                                'strike': call['strike'],
+                                'volume': volume,
+                                'open_interest': open_interest,
+                                'volume_oi_ratio': volume / max(1, open_interest),
+                                'last_price': call['lastPrice'],
+                                'moneyness': moneyness
+                            })
+                    
+                    # Process puts
+                    for _, put in option_chain.puts.iterrows():
+                        volume = put['volume'] if not np.isnan(put['volume']) else 0
+                        open_interest = put['openInterest'] if not np.isnan(put['openInterest']) else 0
+                        
+                        if volume >= min_volume and open_interest >= min_open_interest and volume / max(1, open_interest) >= volume_oi_ratio_threshold:
+                            # Calculate moneyness
+                            moneyness = (put['strike'] - current_price) / current_price * 100
+                            
+                            unusual_puts.append({
+                                'expiry': expiry,
+                                'strike': put['strike'],
+                                'volume': volume,
+                                'open_interest': open_interest,
+                                'volume_oi_ratio': volume / max(1, open_interest),
+                                'last_price': put['lastPrice'],
+                                'moneyness': moneyness
+                            })
+                except Exception as e:
+                    print(f"Error processing {expiry} for {ticker}: {str(e)}")
+                    continue
+            
+            # Sort unusual activity by volume/OI ratio in descending order
+            unusual_calls = sorted(unusual_calls, key=lambda x: x['volume_oi_ratio'], reverse=True)
+            unusual_puts = sorted(unusual_puts, key=lambda x: x['volume_oi_ratio'], reverse=True)
+            
+            # Create the response embed
+            import discord
+            
+            embed = discord.Embed(
+                title=f"🔍 Unusual Options Activity for {ticker} 🔍",
+                description=f"**Current Stock Price:** ${current_price:.2f}\n\nShowing highest volume relative to open interest",
+                color=0x8E24AA  # Purple for unusual activity
+            )
+            
+            # Add unusual calls
+            calls_content = ""
+            if unusual_calls:
+                # Show top 5 unusual calls
+                for i, call in enumerate(unusual_calls[:5]):
+                    call_dollars = call['volume'] * call['last_price'] * 100
+                    calls_content += f"**{i+1}. {call['expiry']} ${call['strike']:.2f} Call**\n"
+                    calls_content += f"   • Volume: {int(call['volume'])} contracts (${call_dollars:,.2f})\n"
+                    calls_content += f"   • Open Interest: {int(call['open_interest'])}\n"
+                    calls_content += f"   • Vol/OI Ratio: {call['volume_oi_ratio']:.2f}\n"
+                    calls_content += f"   • Price: ${call['last_price']:.2f}\n"
+                    calls_content += f"   • {int(abs(call['moneyness']))}% {'ITM' if call['moneyness'] > 0 else 'OTM'}\n\n"
+            else:
+                calls_content = "No unusual call activity detected in the first 5 expiration dates."
+            
+            embed.add_field(
+                name="📈 Unusual CALL Activity",
+                value=calls_content,
+                inline=False
+            )
+            
+            # Add unusual puts
+            puts_content = ""
+            if unusual_puts:
+                # Show top 5 unusual puts
+                for i, put in enumerate(unusual_puts[:5]):
+                    put_dollars = put['volume'] * put['last_price'] * 100
+                    puts_content += f"**{i+1}. {put['expiry']} ${put['strike']:.2f} Put**\n"
+                    puts_content += f"   • Volume: {int(put['volume'])} contracts (${put_dollars:,.2f})\n"
+                    puts_content += f"   • Open Interest: {int(put['open_interest'])}\n"
+                    puts_content += f"   • Vol/OI Ratio: {put['volume_oi_ratio']:.2f}\n"
+                    puts_content += f"   • Price: ${put['last_price']:.2f}\n"
+                    puts_content += f"   • {int(abs(put['moneyness']))}% {'ITM' if put['moneyness'] > 0 else 'OTM'}\n\n"
+            else:
+                puts_content = "No unusual put activity detected in the first 5 expiration dates."
+            
+            embed.add_field(
+                name="📉 Unusual PUT Activity",
+                value=puts_content,
+                inline=False
+            )
+            
+            # Add sentiment analysis
+            total_call_volume = sum(call['volume'] for call in unusual_calls)
+            total_put_volume = sum(put['volume'] for put in unusual_puts)
+            total_volume = max(1, total_call_volume + total_put_volume)  # Avoid division by zero
+            call_percentage = total_call_volume / total_volume * 100
+            put_percentage = total_put_volume / total_volume * 100
+            
+            if call_percentage > 70:
+                sentiment = "Highly Bullish"
+                sentiment_emoji = "🚀"
+            elif call_percentage > 55:
+                sentiment = "Moderately Bullish"
+                sentiment_emoji = "📈"
+            elif put_percentage > 70:
+                sentiment = "Highly Bearish"
+                sentiment_emoji = "🧸"
+            elif put_percentage > 55:
+                sentiment = "Moderately Bearish"
+                sentiment_emoji = "📉"
+            else:
+                sentiment = "Neutral"
+                sentiment_emoji = "⚖️"
+            
+            embed.add_field(
+                name=f"{sentiment_emoji} Options Flow Sentiment",
+                value=f"**Sentiment:** {sentiment}\n"
+                     f"**Call Flow:** {call_percentage:.1f}%\n"
+                     f"**Put Flow:** {put_percentage:.1f}%",
+                inline=False
+            )
+            
+            # Add general disclaimer
+            embed.add_field(
+                name="⚠️ DISCLAIMER",
+                value="Unusual options activity doesn't always indicate smart money. It could be hedging or part of complex strategies. Do your own research before trading.",
+                inline=False
+            )
+            
+            # Add footer with timestamp
+            from datetime import datetime
+            embed.set_footer(text=f"Data as of {datetime.now().strftime('%Y-%m-%d %H:%M')} | Based on available options data")
+            embed.timestamp = datetime.now()
+            
+            print("DEBUG: About to return embed")
+            return embed
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error in unusual activity request: {str(e)}")
+            print(f"Full traceback:\n{error_details}")
+            
+            # Create a generic error embed
+            import discord
+            error_embed = discord.Embed(
+                title="Error Processing Request",
+                description=f"An error occurred while processing your unusual activity request: {str(e)}",
+                color=0xFF0000  # Red for errors
+            )
+            error_embed.set_footer(text="Please try again with a different query")
+            return error_embed
+
+# Set up the Discord client
+import discord
+from discord.ext import commands
+
+intents = discord.Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
+options_bot = OptionsBot()
+
+@client.event
+async def on_ready():
+    """Event handler for when the bot is ready"""
+    print(f'We have logged in as {client.user}')
+    print(f'Bot is connected to {len(client.guilds)} servers')
+    
+    # Set the bot's activity
+    activity = discord.Activity(type=discord.ActivityType.watching, name="option chains | @me for help")
+    await client.change_presence(activity=activity)
+
+@client.event
+async def on_message(message):
+    """Event handler for incoming messages"""
+    # Ignore messages from the bot itself
+    if message.author == client.user:
+        return
+    
+    # Process message through the options bot
+    response = await options_bot.handle_message(message)
+    
+    # If there's a response, send it
+    if response:
+        # Check if response is a string (legacy) or an embed
+        if isinstance(response, str):
+            await message.reply(response)
+        else:
+            # It's an embed
+            await message.reply(embed=response)
+
+@bot.command(name='options_help')
+async def options_help_command(ctx):
+    """Display help information about the bot using Discord embeds"""
+    help_text = options_bot.get_help_instructions()
+    
+    embed = discord.Embed(
+        title="Options Bot Help",
+        description=help_text,
+        color=0x3498DB  # Blue color
+    )
+    
+    embed.set_footer(text="For more detailed examples, please see the documentation")
+    
+    await ctx.send(embed=embed)
+
+# Run the bot
+def run_discord_bot():
+    """Run the Discord bot with the token from environment variables"""
+    token = os.getenv('DISCORD_TOKEN')
+    if not token:
+        print("Error: DISCORD_TOKEN environment variable not set")
+        return
+    
+    client.run(token)
+
+if __name__ == "__main__":
+    run_discord_bot()

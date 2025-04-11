@@ -1,0 +1,44 @@
+I need you to add logic to my options stop-loss recommendation bot specifically for short-term trades (2DTE or less), combining two technical stop-loss strategies: wick-based and VWAP-based stops. The bot should operate conversationally and respond with whichever method gives the tighter (closer to entry) stop.
+
+Here’s what I want built:
+
+---
+
+### 🔁 Combined Stop-Loss Logic (2DTE or Less Only)
+
+1. **Wick-Based Stop**
+   - Identify the most recent candle (or optionally last 2–3 candles).
+   - For long trades, find the lowest wick; for short trades, the highest wick.
+   - Apply a small buffer to account for noise (e.g., `+/- 0.10` or `0.05 * ATR`).
+   - Calculate the stop-loss level based on this.
+
+2. **VWAP-Based Stop**
+   - Retrieve current VWAP value.
+   - For long trades: the stop-loss is triggered if a full candle closes **below** VWAP.
+   - For short trades: triggered on a close **above** VWAP.
+   - Use the VWAP value itself as the reference stop level for comparison.
+
+3. **Compare the Two Stops**
+   - Calculate the dollar distance between each stop and the entry price.
+   - Whichever stop is **tighter** (closer to entry) should be used in the final recommendation.
+
+---
+
+### 📤 Output Format
+
+The bot should respond conversationally with a stop-loss recommendation **based on the tighter of the two methods**, and include both values with an explanation like:
+
+> “Based on current price action, the recommended stop-loss is **$X.XX** using the [Wick-Based/VWAP-Based] method, as it offers a tighter risk level.  
+> For comparison, the alternative method calculated a stop at **$Y.YY**.”
+
+---
+
+### ✅ Requirements
+
+- This logic should only apply when the user is dealing with **scalp trades or 2DTE (or less)**.
+- The bot should compute both stop levels in the background, compare them, and return the one with the smaller risk distance.
+- The output should remain conversational and user-friendly.
+- Make sure VWAP and candle data are pulled from the correct timeframe (e.g., 5-minute or 15-minute).
+- Add comments in the code to make the logic easily extensible.
+
+Let me know once this is implemented or if you need test data to simulate the wick and VWAP conditions.

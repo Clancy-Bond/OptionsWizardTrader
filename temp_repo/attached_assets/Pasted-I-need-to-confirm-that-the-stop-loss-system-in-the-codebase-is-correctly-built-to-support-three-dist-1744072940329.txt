@@ -1,0 +1,36 @@
+I need to confirm that the stop-loss system in the codebase is correctly built to support three distinct trade types: scalp trades, mid-term/swing trades, and long-term options (LEAPS). Each trade type should have its own configurable logic for ATR, volume, buffers, and candle validation.
+
+Please verify the following, broken down by trade type ("scalp", "swing", "leaps"):
+
+1. **Trade-Type Based Configuration**
+   - Does the system support a `trade_type` input to dynamically adjust stop-loss behavior?
+   - Is the following table (or something equivalent) reflected in the code?
+
+   | Trade Type | ATR Period | ATR Buffer (Breakout) | ATR Buffer (Engulfing) | Volume Confirm Mult | DTE Scaling Factor | Validation TF |
+   |------------|------------|------------------------|-------------------------|----------------------|--------------------|---------------|
+   | scalp      | 7          | 0.08                   | 0.04                    | 1.2×                 | 0.8×               | 5m/15m        |
+   | swing      | 14         | 0.10                   | 0.05                    | 1.5×                 | 1.0×               | 1H/4H         |
+   | leaps      | 21         | 0.12                   | 0.06                    | 1.8×                 | 1.2×               | Daily         |
+
+2. **Pattern-Specific Stop-Loss Logic**
+   - For breakouts: Is the stop-loss calculated as the **low (long) or high (short) of the breakout candle ± (ATR × buffer × DTE factor)**?
+   - For engulfing: Same calculation logic with the appropriate (smaller) buffer?
+   - Is the **entry price** based on the **close of the setup candle**?
+
+3. **Volume Confirmation**
+   - Is the entry only valid if volume is ≥ (Volume Confirm Mult × average of last 10 candles), and does this scale based on trade type?
+
+4. **ATR Scaling Based on DTE**
+   - Is the ATR buffer multiplied by a DTE-based factor as specified above?
+   - Does this replace any static % buffer logic?
+
+5. **Pattern Recognition & Filtering**
+   - Are breakouts detected based on range/VWAP highs/lows?
+   - Are engulfing patterns identified properly with direction and size?
+   - Are these patterns only considered valid if formed near support/resistance zones?
+
+6. **Candle Close for Stop Trigger**
+   - Is a full candle **close** required beyond the stop-loss price before triggering an exit?
+   - Or is it still triggering based on intrabar price wicks?
+
+Please audit each of these points thoroughly. Let me know which are already implemented, which are missing or only partially implemented, and what changes are needed to meet the above design.

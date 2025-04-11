@@ -1,0 +1,44 @@
+Initializing OptionsBotNLP
+Loaded 198 stop words
+- option_price keywords: option, price, value...
+- stop_loss keywords: stop, loss, recommendation...
+- unusual_activity keywords: unusual, activity, whale...
+
+===== TESTING IMPROVED STOP LOSS RECOMMENDATION FORMAT =====
+Initializing OptionsBotNLP
+Loaded 198 stop words
+- option_price keywords: option, price, value...
+- stop_loss keywords: stop, loss, recommendation...
+- unusual_activity keywords: unusual, activity, whale...
+Days to expiration: 2, Trade horizon: scalp
+Current option price for TSLA call $270.0 expiring 2025-04-04: $16.72
+Retrieved option Greeks: {'delta': np.float64(0.7715757330803038), 'gamma': np.float64(0.01638329283690324), 'theta': np.float64(-1.4239301635473762), 'vega': np.float64(0.06331153822509526), 'implied_volatility': np.float64(0.8820812573242187)}
+Using ticker: TSLA for option calculations
+Bot returned a valid response!
+
+===== DESCRIPTION CONTENT =====
+
+
+⚠️ **THETA DECAY PROJECTION TO EXPIRY (2025-04-04)** ⚠️
+Your option is projected to decay over the next 2 days:
+
+**Day 1 (2025-04-03):** $15.30 (-8.5% daily, -8.5% total)
+**Day 2 (2025-04-04):** $13.87 (-9.3% daily, -17.0% total)
+
+⚠️ **Critical Warning:** This option is in its final week before expiration when theta decay accelerates dramatically.
+Consider your exit strategy carefully as time decay becomes more significant near expiration.
+
+✅ PASS: Old stop level heading has been successfully removed!
+❌ ERROR: New format text is missing! Text should include 'Options typically lose'
+✅ PASS: Theta decay appears after stop level warning as required!
+
+===== FIELDS CONTENT =====
+
+Field: EmbedProxy(inline=False, name='⚠️ RISK WARNING', value='Stop losses do not guarantee execution at the specified price in fast-moving markets.')
+
+Field: EmbedProxy(inline=False, name='📊 STOP LOSS RECOMMENDATION', value='**Current Stock Price:** $282.76\n**Current Option Price:** $16.72\n• Stock Price Stop Level: $267.21\n• Option Price at Stop: $6.70 (a 59.9% loss)\n')
+
+Field: EmbedProxy(inline=False, name='🔍 SCALP TRADE STOP LOSS (5-15 min chart) 🔍', value='• Ideal For: Same-day or next-day options\n• Technical Basis: Breakout candle low with volatility buffer\n\n⚠️ Options typically lose 40-60% of value when the stock hits stop level due to increasing gamma effects.')
+
+Field: EmbedProxy(inline=False, name='⭐ Analysis ⭐', value='⚡ **SCALP TRADE STOP LOSS (5-15 min chart)** ⚡\n• For short-term options (1-2 days expiry)\n\n**What happens to your option at the stop level?**\n⚠️ This option will likely lose 70-90% of its value if held due to accelerated delta decay and negative gamma.')
+===== END OF TEST =====

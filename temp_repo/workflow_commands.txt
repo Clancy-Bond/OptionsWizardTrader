@@ -1,0 +1,7 @@
+# Commands to run the bot and the admin interface
+
+# Run the Discord bot
+python run_bot.py
+
+# Run the admin interface
+streamlit run simple_app.py --server.port 5000 --server.headless true --server.address 0.0.0.0

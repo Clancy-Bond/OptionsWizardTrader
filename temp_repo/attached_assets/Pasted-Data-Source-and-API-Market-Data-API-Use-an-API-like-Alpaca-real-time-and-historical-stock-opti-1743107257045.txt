@@ -1,0 +1,128 @@
+Data Source and API:
+
+Market Data API: Use an API like:
+
+Alpaca (real-time and historical stock/option data)
+
+Interactive Brokers API (IBKR for options-specific details)
+
+TD Ameritrade API (solid for options chains and real-time prices)
+
+Candle Data:
+
+Request 5-min and 15-min candles.
+
+Include volume, high, low, and close data.
+
+Use bid/ask spread for accurate premium capture.
+
+📏 2. Core Logic:
+
+🎯 Breakout/Breakdown Invalidation Stop-Loss Logic (#3)
+
+Entry Trigger:
+
+Detect a breakout/breakdown based on high/low breach of consolidation range or VWAP breakout.
+
+Volume spike ≥ 1.5x the average of the last 10 candles.
+
+Stop-Loss Calculation:
+
+python
+CopyEdit
+if trade_direction == 'long':
+    entry_price = breakout_candle['close']
+    stop_loss = breakout_candle['low'] - (0.1 * atr)  # 10% buffer below low
+elif trade_direction == 'short':
+    entry_price = breakdown_candle['close']
+    stop_loss = breakout_candle['high'] + (0.1 * atr)  # 10% buffer above high
+Validation: Ensure breakout is confirmed by high volume.
+
+📈 Engulfing/Reversal Candle Invalidation Logic (#4)
+
+Entry Trigger:
+
+Detect an engulfing pattern (bullish or bearish) with volume 1.5x above 10-period moving average.
+
+Confirm reversal after candle close.
+
+Stop-Loss Calculation:
+
+python
+CopyEdit
+if trade_direction == 'long':
+    entry_price = engulfing_candle['close']
+    stop_loss = engulfing_candle['low'] - (0.05 * atr)  # Slight buffer for premium fluctuations
+elif trade_direction == 'short':
+    entry_price = engulfing_candle['close']
+    stop_loss = engulfing_candle['high'] + (0.05 * atr)
+Validation: Ensure pattern forms at key support/resistance zones.
+
+⚠️ 3. Risk/Reward and Spread Adjustment
+
+🔄 Check Minimum 2:1 Risk-to-Reward Ratio:
+
+python
+CopyEdit
+target_price = entry_price + (2 * (entry_price - stop_loss)) if trade_direction == 'long' else entry_price - (2 * (stop_loss - entry_price))
+💹 Option Premium Adjustment for Stop-Loss:
+
+Consider bid/ask spread in stop-loss:
+
+python
+CopyEdit
+adjusted_stop_loss = stop_loss - spread_buffer
+spread_buffer could be dynamically set based on option liquidity.
+
+🕹️ 4. Live Execution and Monitoring
+
+📡 API Execution:
+
+Use API to place options orders with stop-losses.
+
+Track open positions, and monitor price changes dynamically.
+
+Exit immediately on invalidation with stop-loss triggers.
+
+📊 5. Additional Enhancements:
+
+✅ ATR-based buffer for fine-tuned stop-loss.
+
+📏 Use VWAP and EMA for breakout confirmations.
+
+📉 Implement fail-safe timeout to avoid theta decay losses in scalps.
+
+🔍 Integrate volume and bid/ask spread checks before entry.
+
+🧠 Sample Pseudocode:
+
+python
+CopyEdit
+# Import API and libraries
+import alpaca_trade_api as alpaca
+import numpy as np
+
+# Get 5-min candle data
+candle_data = api.get_barset(symbol, '5Min', limit=20)
+breakout_candle = candle_data[-1]
+
+# Define stop-loss based on breakout candle
+if trade_direction == 'long':
+    entry_price = breakout_candle.close
+    stop_loss = breakout_candle.low - (0.1 * atr)
+
+# Place order with stop-loss
+api.submit_order(
+    symbol=symbol,
+    qty=contract_size,
+    side='buy',
+    type='limit',
+    time_in_force='gtc',
+    stop_loss={'stop_price': stop_loss}
+)
+🚨 Pro Tip:
+
+Use ATR and volume filters dynamically to validate breakout and engulfing setups.
+
+Add a logic check for bid/ask spread before placing orders.
+
