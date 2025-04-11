@@ -1,0 +1,144 @@
+System Overview
+OptionsWizard is a multi-component options trading analysis platform consisting of:
+
+A Discord bot with natural language processing capabilities
+A Streamlit-based administration interface
+Several specialized calculation and analysis modules
+The system is designed to assist options traders by providing technical analysis, price calculations, risk management recommendations, and market intelligence through a conversational interface.
+
+Core Components
+1. Discord Bot (discord_bot.py)
+The primary interface for end users, implemented using discord.py. Key classes:
+
+OptionsBotNLP: Natural language processor that parses user queries using regex pattern matching and contextual analysis to extract:
+
+Ticker symbols
+Strike prices
+Expiration dates
+Option types (calls/puts)
+Request types (price estimates, stop-loss recommendations, unusual activity)
+OptionsBot: Core bot class that:
+
+Interfaces with the Discord API
+Channels parsed requests to appropriate handlers
+Formats responses as Discord embeds with color-coding (green for calls, red for puts)
+Applies channel restrictions based on configuration
+Only responds when directly mentioned
+The bot leverages message.mentions to ensure it only responds when explicitly tagged, and uses a whitelist of channel IDs stored in a configuration file to restrict where it can respond.
+
+2. Technical Analysis Module (technical_analysis.py)
+Provides stop-loss recommendations using multiple methodologies:
+
+ATR-Based Stop-Loss: Uses Average True Range to calculate dynamic stop-loss levels with different buffer multipliers based on time frame:
+
+LEAPS (180+ DTE): Weekly candles with 0.1×ATR buffer
+Swing trades (3-90 DTE): 4-hour chart with 0.5×ATR buffer
+Scalp trades (0-2 DTE): 5-minute chart with special combined analysis
+Buffer Enforcement: Implements mandatory buffer percentage limits by DTE:
+
+0-1 DTE: 1.0% maximum buffer
+2 DTE: 2.0% maximum buffer
+3-5 DTE: 3.0% maximum buffer
+6-180+ DTE: 5.0% maximum buffer
+Combined Scalp Stop-Loss (combined_scalp_stop_loss.py): For short-term trades, implements a dual-methodology approach:
+
+Wick-based stops using lowest/highest wicks of recent candles
+VWAP-based stops using Volume Weighted Average Price as a technical boundary
+Returns the tighter (closer to entry) of the two stop levels
+3. Options Calculation Module (option_calculator.py)
+Handles pricing and risk calculations:
+
+Black-Scholes Implementation: Advanced options pricing calculations beyond simple intrinsic value
+Greeks Calculation: Delta, gamma, theta, vega, and rho calculations
+Dynamic Theta Decay (calculate_dynamic_theta_decay.py): Projects option value decay over time with interval frequency based on trade horizon:
+Scalp trades: Hourly intervals
+Swing trades: Daily intervals
+Long-term trades: Weekly intervals
+4. Unusual Options Activity Module (unusual_activity.py)
+Detects institutional positioning through options flow analysis:
+
+Volume/Open Interest Analysis: Identifies unusual options volume relative to open interest
+Size Detection: Flags unusually large individual transactions
+Sentiment Analysis: Determines overall bullish/bearish positioning based on call/put ratio and positioning relative to current price
+Pattern Recognition: Identifies common institutional trading patterns like large block trades
+5. Administration Interface (discord_bot_config.py, simple_app.py)
+Streamlit-based web interface for system administration:
+
+Token Management: Secure storage and updates of the Discord API token
+Channel Configuration: Whitelist management for channel restrictions
+Status Monitoring: Bot connection verification
+Permission Management: Controlling which users can access administrative functions
+Data Flow Architecture
+User inputs a natural language query in Discord
+NLP processor extracts structured parameters
+Request is routed to appropriate handler based on intent recognition
+Parameters are validated and normalized
+Data is fetched from market APIs (yfinance)
+Calculations are performed in specialized modules
+Results are formatted into Discord embeds
+Response is sent back to the appropriate Discord channel
+Technical Implementation Details
+Stop-Loss Recommendation Logic
+The stop-loss system involves multiple decision points:
+
+Trade Horizon Determination:
+
+Automatic detection based on days to expiration (DTE)
+Can be manually overridden in the query
+Chart Timeframe Selection:
+
+LEAPS: Weekly candles
+Swing: 4-hour candles
+Scalp: 5-minute candles with special handling
+Buffer Calculation:
+
+Base buffer determined by technical analysis (ATR multiplier)
+Final buffer enforced by DTE-based limits
+Direction-aware: Different handling for calls vs. puts
+Error Handling:
+
+Graceful degradation when technical levels can't be determined
+Fallback to DTE-based percentage buffers
+Discord Response Formatting
+Responses use Discord embeds with standardized formatting:
+
+Color Coding:
+
+Calls: Green (#00FF00)
+Puts: Red (#FF0000)
+Unusual activity: Purple (#9B59B6)
+Field Organization:
+
+Title includes ticker, strike, expiration, and option type
+Stop-loss fields show both price and percentage from current
+Risk warning section highlighted with ⚠️ emoji
+Theta decay projection shows intervals based on trade horizon
+Stop loss indicators marked with 🛑 emoji
+Unusual activity indicators marked with 🐳 emoji
+Date Formatting:
+
+Expiration dates shown as YYYY-MMM-DD (e.g., 2025-APR-18)
+Trade horizon indicators (LONG-TERM/SWING/SCALP) with emoji markers
+Configuration Management
+Settings are stored in JSON format with these components:
+
+Channel whitelist: Array of Discord channel IDs
+API tokens: Securely stored environment variables
+Admin users: List of Discord user IDs with administrative privileges
+External Dependencies
+discord.py: Discord API integration
+yfinance: Market data source
+pandas: Data manipulation and analysis
+numpy: Numerical computations
+matplotlib: Optional charting capabilities
+streamlit: Administrative interface
+python-dotenv: Environment variable management
+Error Handling Approach
+The system implements comprehensive error handling:
+
+API Failures: Graceful handling of yfinance API issues
+Invalid Queries: User-friendly error messages for malformed requests
+Data Availability: Clear messaging when requested options data isn't available
+Configuration Issues: Automatic validation of configuration settings
+Discord API Limitations: Rate limit handling and connection recovery
+This architecture ensures OptionsWizard delivers accurate, technically-sound options analysis through a user-friendly conversational interface, with strong administrative controls and robust error handling.
