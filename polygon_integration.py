@@ -37,16 +37,14 @@ _min_call_interval = 0.4  # Hybrid approach: slightly faster than conservative 0
 _consecutive_calls = 0
 _max_retries = 3  # Reduced maximum retries to fail faster to YF fallback
 
-# Flag to identify API endpoints that should quickly fall back to Yahoo Finance
+# Flag to identify API endpoints that previously would fall back to Yahoo Finance
+# Now returns False for all endpoints as we're using Polygon.io exclusively
 def is_fallback_endpoint(url):
-    """Check if this URL is for an endpoint that should quickly fall back to YF"""
-    # Check if this is a price lookup or options chain endpoint
-    price_patterns = ['/last/trade/', '/last/quote/', '/v2/snapshot/']  
-    options_patterns = ['/options/contracts', '/reference/options/']
-    
-    for pattern in price_patterns + options_patterns:
-        if pattern in url:
-            return True
+    """
+    This function previously identified endpoints that would fall back to Yahoo Finance.
+    It now always returns False as we've disabled all Yahoo Finance fallbacks.
+    """
+    # No longer falling back to Yahoo Finance for any endpoint
     return False
 
 def handle_rate_limit(retry_after=1):
@@ -414,52 +412,19 @@ def get_current_price(ticker):
     
     ticker = ticker.upper()
     
-    # First check if today is not the 5th of the month - directly use Yahoo Finance
-    today = datetime.now()
-    if today.day != 5:
-        # On days other than the 5th, prefer Yahoo Finance to save Polygon API calls
-        try:
-            import yfinance as yf
-            print(f"Using Yahoo Finance for {ticker} price data (not 5th of month)")
-            stock = yf.Ticker(ticker)
-            price = stock.info.get('regularMarketPrice')
-            if price:
-                return price
-        except Exception as yf_error:
-            print(f"Yahoo Finance price lookup failed: {str(yf_error)}")
-            # Continue with Polygon as fallback if Yahoo fails
+    # Always use Polygon.io for price data, regardless of the day of month
+    # This ensures consistent data quality and avoids mixing data sources
+    print(f"Using Polygon.io for {ticker} price data")
     
     try:
         # Get latest trade from Polygon
         endpoint = f"{BASE_URL}/v2/last/trade/{ticker}?apiKey={POLYGON_API_KEY}"
         response = throttled_api_call(endpoint, headers=get_headers())
         
-        # If response is None or indicates we should use YF fallback
-        if not response or response.status_code in [403, 429, 503]:
-            print(f"Using Yahoo Finance fallback for {ticker} price data")
-            try:
-                import yfinance as yf
-                stock = yf.Ticker(ticker)
-                price = stock.info.get('regularMarketPrice')
-                if price:
-                    return price
-            except Exception as yf_error:
-                print(f"Yahoo Finance fallback also failed: {str(yf_error)}")
-            return None
-            
-        # If any other error occurs with Polygon
-        if response.status_code != 200:
-            print(f"Error fetching current price for {ticker}: {response.status_code}")
-            # Always try Yahoo Finance as fallback for any error
-            try:
-                import yfinance as yf
-                print(f"Fallback to Yahoo Finance for {ticker} price data")
-                stock = yf.Ticker(ticker)
-                price = stock.info.get('regularMarketPrice')
-                if price:
-                    return price
-            except Exception as yf_error:
-                print(f"Yahoo Finance fallback also failed: {str(yf_error)}")
+        # If response is None or there's an error
+        if not response or response.status_code != 200:
+            print(f"Error fetching current price for {ticker}: {response.status_code if response else 'No response'}")
+            print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
             return None
         
         # Process successful Polygon response
@@ -515,90 +480,9 @@ def get_option_chain(ticker, expiration_date=None):
     
     ticker = ticker.upper()
     
-    # First check if today is not the 5th of the month - directly use Yahoo Finance for options
-    today = datetime.now()
-    if today.day != 5:
-        # On days other than the 5th, prefer Yahoo Finance to save API calls
-        try:
-            import yfinance as yf
-            import pandas as pd
-            print(f"Using Yahoo Finance for {ticker} option chain (not 5th of month)")
-            
-            stock = yf.Ticker(ticker)
-            
-            # If we need specific expiration
-            if expiration_date:
-                try:
-                    options = stock.option_chain(expiration_date)
-                    # Convert Yahoo format to Polygon format
-                    results = []
-                    
-                    # Process calls
-                    for _, row in options.calls.iterrows():
-                        results.append({
-                            'ticker': f"{ticker}{expiration_date.replace('-', '')}C{int(row['strike']*1000)}",
-                            'underlying_ticker': ticker,
-                            'expiration_date': expiration_date,
-                            'strike_price': float(row['strike']),
-                            'contract_type': 'call',
-                            'last_price': float(row['lastPrice']),
-                            'volume': int(row['volume']),
-                            'open_interest': int(row['openInterest'])
-                        })
-                    
-                    # Process puts
-                    for _, row in options.puts.iterrows():
-                        results.append({
-                            'ticker': f"{ticker}{expiration_date.replace('-', '')}P{int(row['strike']*1000)}",
-                            'underlying_ticker': ticker,
-                            'expiration_date': expiration_date,
-                            'strike_price': float(row['strike']),
-                            'contract_type': 'put',
-                            'last_price': float(row['lastPrice']),
-                            'volume': int(row['volume']),
-                            'open_interest': int(row['openInterest'])
-                        })
-                    
-                    # Cache the results
-                    cache_key = f"{ticker}_{expiration_date}"
-                    option_chain_cache[cache_key] = results
-                    
-                    return results
-                except Exception as e:
-                    print(f"Error getting Yahoo chain for specific expiration: {str(e)}")
-                    # Continue with Polygon if this fails
-            else:
-                # If we just need available expirations
-                expirations = stock.options
-                if expirations:
-                    # Get the first expiration's chain as an example
-                    try:
-                        options = stock.option_chain(expirations[0])
-                        results = []
-                        
-                        # Process just a sample set to return format
-                        for exp_date in expirations:
-                            sample_call = {
-                                'ticker': f"{ticker}{exp_date.replace('-', '')}C00000",
-                                'underlying_ticker': ticker,
-                                'expiration_date': exp_date,
-                                'contract_type': 'call'
-                            }
-                            sample_put = {
-                                'ticker': f"{ticker}{exp_date.replace('-', '')}P00000",
-                                'underlying_ticker': ticker,
-                                'expiration_date': exp_date,
-                                'contract_type': 'put'
-                            }
-                            results.append(sample_call)
-                            results.append(sample_put)
-                        
-                        return results
-                    except:
-                        pass
-        except Exception as yf_error:
-            print(f"Yahoo Finance options lookup failed: {str(yf_error)}")
-            # Continue with Polygon as fallback
+    # Always use Polygon.io for options data, regardless of the day of month
+    # This ensures consistent data quality and avoids mixing data sources
+    print(f"Using Polygon.io for {ticker} option chain")
     
     # Check cache first if we have an expiration date
     cache_key = f"{ticker}_{expiration_date}"

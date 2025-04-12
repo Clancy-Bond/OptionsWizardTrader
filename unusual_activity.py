@@ -133,111 +133,23 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         return f"📊 Polygon.io API key is not available. Please provide a valid API key to view unusual options activity."
 
-def detect_unusual_options_flow(options_data):
+def detect_unusual_options_flow(option_symbols):
     """
-    Analyze options data to detect unusual flow patterns
+    This function is kept for backward compatibility with any code that might call it,
+    but now it simply returns a message indicating we're now using Polygon.io's API
+    for unusual options activity detection.
     
     Args:
-        options_data (DataFrame): Options chain data
+        option_symbols: List of option symbols or options data (not used)
     
     Returns:
-        dict: Unusual activity indicators
+        dict: A message indicating we now use Polygon.io
     """
-    # Skip rows with zero open interest to avoid division by zero
-    valid_data = options_data[options_data['openInterest'] > 0].copy()
-    
-    if valid_data.empty:
-        return {
-            'unusual_detected': False,
-            'activity_level': 'None',
-            'volume_oi_ratio': 0,
-            'sentiment': 'Neutral',
-            'large_trades': []
-        }
-    
-    # Calculate volume to open interest ratio
-    valid_data['volume_oi_ratio'] = valid_data['volume'] / valid_data['openInterest']
-    
-    # Find strikes with unusual volume
-    unusual_threshold = 3.0  # Volume at least 3x open interest
-    unusual_strikes = valid_data[valid_data['volume_oi_ratio'] >= unusual_threshold]
-    
-    # Determine if there's unusual activity
-    if unusual_strikes.empty or unusual_strikes['volume'].sum() < 100:
-        return {
-            'unusual_detected': False,
-            'activity_level': 'Low',
-            'volume_oi_ratio': valid_data['volume_oi_ratio'].mean(),
-            'sentiment': 'Neutral',
-            'large_trades': []
-        }
-    
-    # Calculate highest volume/OI ratio
-    max_vol_oi = unusual_strikes['volume_oi_ratio'].max()
-    
-    # Determine activity level
-    activity_level = 'Moderate'
-    if max_vol_oi >= 10.0:
-        activity_level = 'High'
-    if max_vol_oi >= 20.0:
-        activity_level = 'Very High'
-    
-    # Determine sentiment
-    # Check if unusual strikes are mostly ITM or OTM
-    current_price = options_data['lastPrice'].iloc[0]  # Approximate current price
-    
-    # For calls, ITM if strike < price. For puts, ITM if strike > price
-    # Determine if the options are calls or puts based on contractSymbol
-    sample_symbol = options_data['contractSymbol'].iloc[0]
-    is_call = 'C' in sample_symbol
-    
-    if is_call:
-        itm_strikes = unusual_strikes[unusual_strikes['strike'] < current_price]
-        otm_strikes = unusual_strikes[unusual_strikes['strike'] >= current_price]
-    else:
-        itm_strikes = unusual_strikes[unusual_strikes['strike'] > current_price]
-        otm_strikes = unusual_strikes[unusual_strikes['strike'] <= current_price]
-    
-    itm_volume = itm_strikes['volume'].sum() if not itm_strikes.empty else 0
-    otm_volume = otm_strikes['volume'].sum() if not otm_strikes.empty else 0
-    
-    if is_call:
-        if otm_volume > itm_volume * 2:
-            sentiment = 'Strongly Bullish'
-        elif otm_volume > itm_volume:
-            sentiment = 'Bullish'
-        elif itm_volume > otm_volume * 2:
-            sentiment = 'Cautiously Bullish'
-        else:
-            sentiment = 'Slightly Bullish'
-    else:
-        if otm_volume > itm_volume * 2:
-            sentiment = 'Strongly Bearish'
-        elif otm_volume > itm_volume:
-            sentiment = 'Bearish'
-        elif itm_volume > otm_volume * 2:
-            sentiment = 'Cautiously Bearish'
-        else:
-            sentiment = 'Slightly Bearish'
-    
-    # Identify largest trades
-    # Sort by volume to identify the largest trades
-    top_trades = unusual_strikes.nlargest(3, 'volume')
-    large_trades = []
-    
-    for _, trade in top_trades.iterrows():
-        strike = trade['strike']
-        expiry = trade['contractSymbol'].split(options_data['contractSymbol'].iloc[0].split('C')[0])[-1]
-        volume = trade['volume']
-        open_interest = trade['openInterest']
-        
-        trade_str = f"Strike: ${strike:.2f}, Exp: {expiry}, Vol: {volume} ({volume/open_interest:.1f}x OI)"
-        large_trades.append(trade_str)
-    
     return {
-        'unusual_detected': True,
-        'activity_level': activity_level,
-        'volume_oi_ratio': max_vol_oi,
-        'sentiment': sentiment,
-        'large_trades': large_trades
+        'unusual_detected': False,
+        'activity_level': 'None',
+        'volume_oi_ratio': 0,
+        'sentiment': 'Neutral',
+        'large_trades': [],
+        'message': 'This function is deprecated. The system now uses Polygon.io API exclusively for unusual options activity detection.'
     }
