@@ -67,6 +67,9 @@ def get_option_trade_data(option_symbol, min_size=5):
                 }
     
     except Exception as e:
-        print(f"Error getting option trade data: {str(e)}")
+        print(f"Error getting option trade data for {option_symbol}: {str(e)}")
+        # Print traceback for debugging
+        import traceback
+        traceback.print_exc()
     
     return None
