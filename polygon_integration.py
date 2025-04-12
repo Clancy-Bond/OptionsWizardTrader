@@ -1392,7 +1392,7 @@ def get_simplified_unusual_activity_summary(ticker):
                 if calls_volume > 0 or puts_volume > 0:
                     bullish_pct = (calls_volume / (calls_volume + puts_volume)) * 100 if calls_volume + puts_volume > 0 else 50
                     bearish_pct = 100 - bullish_pct
-                    response += f"Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
+                    response += f"**Overall flow:** {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
                 
                 # Add premium data notice at the bottom
                 if current_price and not (biggest_option and biggest_option['premium'] > 100000):
