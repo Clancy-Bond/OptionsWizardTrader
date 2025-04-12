@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import asyncio
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -290,8 +291,22 @@ class OptionsBot(commands.Bot):
                 parsed['option_type'] = 'call'
         
         try:
-            # Get unusual activity data using our custom function
-            response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
+            # First send a message indicating we're processing the request
+            processing_msg = await message.channel.send(f"Processing unusual options activity for {parsed['ticker']}... This may take a moment.")
+            
+            # Use run_in_executor to run the function in a background thread
+            loop = asyncio.get_event_loop()
+            response_text = await loop.run_in_executor(
+                None,
+                unusual_activity.get_simplified_unusual_activity_summary,
+                parsed['ticker']
+            )
+            
+            # Delete the processing message once we have the results
+            try:
+                await processing_msg.delete()
+            except:
+                pass
             
             # Determine what type of response we have
             using_fallback = "not available through our data provider" in response_text.lower()
@@ -432,8 +447,22 @@ class OptionsBot(commands.Bot):
     
     async def handle_unusual_activity_for_both(self, message, parsed):
         """Handle unusual options activity requests for both calls and puts"""
-        # Get the simplified unusual activity summary - the same function works for "both"
-        response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
+        # First send a message indicating we're processing the request
+        processing_msg = await message.channel.send(f"Processing unusual options activity for {parsed['ticker']} (both calls & puts)... This may take a moment.")
+        
+        # Run the intensive operation in a separate thread to prevent blocking the bot
+        loop = asyncio.get_event_loop()
+        response_text = await loop.run_in_executor(
+            None,
+            unusual_activity.get_simplified_unusual_activity_summary,
+            parsed['ticker']
+        )
+        
+        # Delete the processing message once we have the results
+        try:
+            await processing_msg.delete()
+        except:
+            pass
         
         # Determine what type of response we have
         using_fallback = "not available through our data provider" in response_text.lower()
