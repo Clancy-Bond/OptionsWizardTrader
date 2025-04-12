@@ -1,6 +1,3 @@
-import yfinance as yf
-import pandas as pd
-import numpy as np
 import random  # For generating demo data only
 import datetime
 import os
@@ -11,6 +8,7 @@ from polygon_trades import get_option_trade_data
 def detect_unusual_activity(ticker, option_type):
     """
     Detect unusual options activity for a given ticker and option type
+    using only Polygon.io data
     
     Args:
         ticker (str): The ticker symbol
@@ -26,53 +24,52 @@ def detect_unusual_activity(ticker, option_type):
         'unusual_activity_detected': False
     }
     
+    # Only proceed if Polygon API key is available
+    if not os.getenv('POLYGON_API_KEY'):
+        return {
+            **response,
+            'error': "Polygon.io API key is not available. Please provide a valid API key to view unusual options activity."
+        }
+    
     # Get option chain data
     try:
-        stock = yf.Ticker(ticker)
-        expirations = stock.options
+        # Retrieve unusual options activity from Polygon via our integration module
+        unusual_activity_data = polygon.get_unusual_options_activity(ticker)
         
-        if not expirations:
-            return {
-                **response,
-                'error': f"No options data available for {ticker}"
-            }
-        
-        # Get the first few expirations
-        option_data = []
-        for exp in expirations[:3]:  # Limit to first 3 expirations
-            try:
-                chain = stock.option_chain(exp)
-                if option_type.lower() == 'call':
-                    option_data.append(chain.calls)
-                else:
-                    option_data.append(chain.puts)
-            except:
-                continue
-        
-        if not option_data:
-            return {
-                **response,
-                'error': f"Could not retrieve {option_type} options data for {ticker}"
-            }
-        
-        # Combine all expirations
-        all_options = pd.concat(option_data)
-        
-        # Check for unusual activity
-        unusual_activity = detect_unusual_options_flow(all_options)
-        
-        if unusual_activity['unusual_detected']:
-            response.update({
-                'unusual_activity_detected': True,
-                'activity_level': unusual_activity['activity_level'],
-                'volume_oi_ratio': unusual_activity['volume_oi_ratio'],
-                'sentiment': unusual_activity['sentiment']
-            })
+        # Filter for specific option type if requested
+        if unusual_activity_data:
+            filtered_activity = []
+            for item in unusual_activity_data:
+                # Check if this is the requested option type
+                if option_type.lower() == 'call' and item.get('sentiment') == 'bullish':
+                    filtered_activity.append(item)
+                elif option_type.lower() == 'put' and item.get('sentiment') == 'bearish':
+                    filtered_activity.append(item)
             
-            if unusual_activity['large_trades']:
-                response['large_trades'] = unusual_activity['large_trades']
+            if filtered_activity:
+                # We have unusual activity for the requested option type
+                max_premium_item = max(filtered_activity, key=lambda x: x.get('premium', 0))
+                
+                response.update({
+                    'unusual_activity_detected': True,
+                    'activity_level': 'High' if max_premium_item.get('premium', 0) > 1000000 else 'Moderate',
+                    'volume': max_premium_item.get('volume', 0),
+                    'premium': max_premium_item.get('premium', 0),
+                    'sentiment': 'Bullish' if option_type.lower() == 'call' else 'Bearish',
+                    'contract': max_premium_item.get('contract', '')
+                })
+                
+                # Add transaction date if available
+                if 'transaction_date' in max_premium_item:
+                    response['transaction_date'] = max_premium_item['transaction_date']
+                
+                return response
         
-        return response
+        # If we get here, no unusual activity was found for the requested option type
+        return {
+            **response,
+            'message': f"No unusual {option_type} options activity detected for {ticker} in Polygon.io data."
+        }
         
     except Exception as e:
         return {
