@@ -284,6 +284,17 @@ def get_current_price(ticker):
             
         if response.status_code != 200:
             print(f"Error fetching current price for {ticker}: {response.status_code}")
+            # If forbidden error, try Yahoo Finance as fallback
+            if response.status_code == 403:
+                try:
+                    import yfinance as yf
+                    print(f"Fallback to Yahoo Finance for {ticker} price data")
+                    stock = yf.Ticker(ticker)
+                    price = stock.info.get('regularMarketPrice')
+                    if price:
+                        return price
+                except Exception as yf_error:
+                    print(f"Yahoo Finance fallback also failed: {str(yf_error)}")
             return None
         
         data = response.json()
@@ -296,6 +307,18 @@ def get_current_price(ticker):
         
     except Exception as e:
         print(f"Error fetching current price for {ticker}: {str(e)}")
+        
+        # Try Yahoo Finance as fallback
+        try:
+            import yfinance as yf
+            print(f"Exception fallback to Yahoo Finance for {ticker} price data")
+            stock = yf.Ticker(ticker)
+            price = stock.info.get('regularMarketPrice')
+            if price:
+                return price
+        except Exception as yf_error:
+            print(f"Yahoo Finance fallback also failed: {str(yf_error)}")
+            
         return None
 
 def get_option_chain(ticker, expiration_date=None):
@@ -412,6 +435,24 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         chain = get_option_chain(ticker, expiration_date)
         
         if not chain:
+            # Try Yahoo Finance as fallback
+            try:
+                import yfinance as yf
+                print(f"Fallback to Yahoo Finance for {ticker} options chain")
+                stock = yf.Ticker(ticker)
+                options = stock.option_chain(expiration_date)
+                
+                if option_type == 'call':
+                    chain_df = options.calls
+                else:
+                    chain_df = options.puts
+                
+                # Find closest strike
+                closest_strike = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
+                if not closest_strike.empty:
+                    return closest_strike['lastPrice'].values[0]
+            except Exception as yf_error:
+                print(f"Yahoo Finance options fallback failed: {str(yf_error)}")
             return None
         
         # Find the matching option
@@ -424,6 +465,24 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
         if not option_symbol:
             print(f"Option not found: {ticker} {expiration_date} {strike_price} {option_type}")
+            # Try Yahoo Finance as fallback for strike not found
+            try:
+                import yfinance as yf
+                print(f"Fallback to Yahoo Finance for strike not found: {ticker} {strike_price} {option_type}")
+                stock = yf.Ticker(ticker)
+                options = stock.option_chain(expiration_date)
+                
+                if option_type == 'call':
+                    chain_df = options.calls
+                else:
+                    chain_df = options.puts
+                
+                # Find closest strike
+                closest_strike = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
+                if not closest_strike.empty:
+                    return closest_strike['lastPrice'].values[0]
+            except Exception as yf_error:
+                print(f"Yahoo Finance options fallback failed: {str(yf_error)}")
             return None
         
         # Now get the latest price for this option
@@ -432,6 +491,25 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
         if response.status_code != 200:
             print(f"Error fetching option price: {response.status_code}")
+            # If forbidden error (403), fallback to Yahoo Finance
+            if response.status_code == 403:
+                try:
+                    import yfinance as yf
+                    print(f"Fallback to Yahoo Finance for {ticker} {strike_price} {option_type} option price")
+                    stock = yf.Ticker(ticker)
+                    options = stock.option_chain(expiration_date)
+                    
+                    if option_type == 'call':
+                        chain_df = options.calls
+                    else:
+                        chain_df = options.puts
+                    
+                    # Find closest strike
+                    closest_match = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
+                    if not closest_match.empty:
+                        return closest_match['lastPrice'].values[0]
+                except Exception as yf_error:
+                    print(f"Yahoo Finance option price fallback failed: {str(yf_error)}")
             return None
         
         data = response.json()
@@ -444,6 +522,26 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
     except Exception as e:
         print(f"Error fetching option price: {str(e)}")
+        
+        # Try Yahoo Finance as a final fallback
+        try:
+            import yfinance as yf
+            print(f"Exception fallback to Yahoo Finance for {ticker} {strike_price} {option_type}")
+            stock = yf.Ticker(ticker)
+            options = stock.option_chain(expiration_date)
+            
+            if option_type == 'call':
+                chain_df = options.calls
+            else:
+                chain_df = options.puts
+            
+            # Find closest strike
+            closest_match = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
+            if not closest_match.empty:
+                return closest_match['lastPrice'].values[0]
+        except Exception as yf_error:
+            print(f"Yahoo Finance final fallback also failed: {str(yf_error)}")
+            
         return None
 
 def get_unusual_options_activity(ticker):
@@ -467,6 +565,86 @@ def get_unusual_options_activity(ticker):
         chain = get_option_chain(ticker)
         
         if not chain:
+            # Try to use yfinance for basic options activity
+            try:
+                import yfinance as yf
+                import pandas as pd
+                import numpy as np
+                
+                print(f"Fallback to Yahoo Finance for {ticker} unusual options activity")
+                stock = yf.Ticker(ticker)
+                
+                # Get options expirations
+                expirations = stock.options
+                
+                if not expirations or len(expirations) == 0:
+                    return None
+                
+                # Use the closest expiration date
+                exp_date = expirations[0]
+                
+                # Get option chain
+                options = stock.option_chain(exp_date)
+                
+                # Process calls and puts
+                calls_df = options.calls
+                puts_df = options.puts
+                
+                # Combine unusual activity for both
+                unusual_activity = []
+                
+                # For calls - find options with high volume relative to open interest
+                if not calls_df.empty:
+                    # Calculate volume to open interest ratio
+                    calls_df['vol_oi_ratio'] = calls_df['volume'] / calls_df['openInterest'].replace(0, 1)
+                    
+                    # Sort by volume and take top options
+                    top_calls = calls_df.sort_values('volume', ascending=False).head(3)
+                    
+                    # Add to unusual activity list
+                    for _, row in top_calls.iterrows():
+                        if row['volume'] > 20:  # Only include significant volume
+                            premium = row['volume'] * row['lastPrice'] * 100  # Each contract is 100 shares
+                            
+                            if premium > 10000:  # Only include if premium is significant
+                                unusual_activity.append({
+                                    'contract': f"{ticker} {row['strike']} {exp_date} CALL",
+                                    'volume': int(row['volume']),
+                                    'avg_price': float(row['lastPrice']),
+                                    'premium': premium,
+                                    'sentiment': 'bullish'
+                                })
+                
+                # For puts - similar analysis
+                if not puts_df.empty:
+                    # Calculate volume to open interest ratio
+                    puts_df['vol_oi_ratio'] = puts_df['volume'] / puts_df['openInterest'].replace(0, 1)
+                    
+                    # Sort by volume and take top options
+                    top_puts = puts_df.sort_values('volume', ascending=False).head(3)
+                    
+                    # Add to unusual activity list
+                    for _, row in top_puts.iterrows():
+                        if row['volume'] > 20:  # Only include significant volume
+                            premium = row['volume'] * row['lastPrice'] * 100
+                            
+                            if premium > 10000:  # Only include if premium is significant
+                                unusual_activity.append({
+                                    'contract': f"{ticker} {row['strike']} {exp_date} PUT",
+                                    'volume': int(row['volume']),
+                                    'avg_price': float(row['lastPrice']),
+                                    'premium': premium,
+                                    'sentiment': 'bearish'
+                                })
+                
+                # Sort by premium in descending order and return top 5
+                if unusual_activity:
+                    unusual_activity.sort(key=lambda x: x['premium'], reverse=True)
+                    return unusual_activity[:5]
+                    
+            except Exception as yf_error:
+                print(f"Yahoo Finance unusual activity fallback failed: {str(yf_error)}")
+            
             return None
         
         # Get current stock price for context
@@ -474,6 +652,8 @@ def get_unusual_options_activity(ticker):
         
         # Track potential unusual activity
         unusual_activity = []
+        forbidden_error_count = 0
+        processed_options = 0
         
         # Look for unusual volume and premium patterns
         for option in chain:
@@ -499,7 +679,15 @@ def get_unusual_options_activity(ticker):
             endpoint = f"{BASE_URL}/v3/trades/{option_symbol}?limit=50&order=desc&apiKey={POLYGON_API_KEY}"
             response = throttled_api_call(endpoint, headers=get_headers())
             
+            processed_options += 1
+            
             if response.status_code != 200:
+                if response.status_code == 403:
+                    forbidden_error_count += 1
+                    # If we've hit too many forbidden errors, this endpoint probably requires a plan upgrade
+                    if forbidden_error_count > 5 and processed_options < 10:
+                        print(f"Multiple 403 errors, likely need Polygon.io plan upgrade for options trades data")
+                        break
                 continue
                 
             data = response.json()
@@ -531,6 +719,71 @@ def get_unusual_options_activity(ticker):
                         'sentiment': sentiment
                     })
         
+        # If we got too many 403 errors, try Yahoo Finance as a fallback
+        if forbidden_error_count > 5 and len(unusual_activity) == 0:
+            try:
+                import yfinance as yf
+                import pandas as pd
+                
+                print(f"Too many 403 errors, using Yahoo Finance for {ticker} unusual options activity")
+                stock = yf.Ticker(ticker)
+                
+                # Get options expirations
+                expirations = stock.options
+                
+                if not expirations or len(expirations) == 0:
+                    return None
+                
+                # Use the closest expiration date
+                exp_date = expirations[0]
+                
+                # Get option chain
+                options = stock.option_chain(exp_date)
+                
+                # Process calls and puts
+                calls_df = options.calls
+                puts_df = options.puts
+                
+                # For calls - find options with high volume
+                if not calls_df.empty:
+                    # Sort by volume and take top options
+                    top_calls = calls_df.sort_values('volume', ascending=False).head(3)
+                    
+                    # Add to unusual activity list
+                    for _, row in top_calls.iterrows():
+                        if row['volume'] > 20:  # Only include significant volume
+                            premium = row['volume'] * row['lastPrice'] * 100  # Each contract is 100 shares
+                            
+                            if premium > 10000:  # Only include if premium is significant
+                                unusual_activity.append({
+                                    'contract': f"{ticker} {row['strike']} {exp_date} CALL",
+                                    'volume': int(row['volume']),
+                                    'avg_price': float(row['lastPrice']),
+                                    'premium': premium,
+                                    'sentiment': 'bullish'
+                                })
+                
+                # For puts - similar analysis
+                if not puts_df.empty:
+                    # Sort by volume and take top options
+                    top_puts = puts_df.sort_values('volume', ascending=False).head(3)
+                    
+                    # Add to unusual activity list
+                    for _, row in top_puts.iterrows():
+                        if row['volume'] > 20:  # Only include significant volume
+                            premium = row['volume'] * row['lastPrice'] * 100
+                            
+                            if premium > 10000:  # Only include if premium is significant
+                                unusual_activity.append({
+                                    'contract': f"{ticker} {row['strike']} {exp_date} PUT",
+                                    'volume': int(row['volume']),
+                                    'avg_price': float(row['lastPrice']),
+                                    'premium': premium,
+                                    'sentiment': 'bearish'
+                                })
+            except Exception as yf_error:
+                print(f"Yahoo Finance unusual activity fallback failed: {str(yf_error)}")
+        
         # Sort by premium in descending order
         unusual_activity.sort(key=lambda x: x['premium'], reverse=True)
         
@@ -539,6 +792,78 @@ def get_unusual_options_activity(ticker):
         
     except Exception as e:
         print(f"Error fetching unusual activity for {ticker}: {str(e)}")
+        # Try Yahoo Finance as a last resort
+        try:
+            import yfinance as yf
+            
+            print(f"Exception fallback to Yahoo Finance for {ticker} unusual options activity")
+            stock = yf.Ticker(ticker)
+            
+            # Get options expirations
+            expirations = stock.options
+            
+            if not expirations or len(expirations) == 0:
+                return None
+            
+            # Use the closest expiration date
+            exp_date = expirations[0]
+            
+            # Get option chain
+            options = stock.option_chain(exp_date)
+            
+            # Track unusual activity
+            unusual_activity = []
+            
+            # Process calls and puts
+            calls_df = options.calls
+            puts_df = options.puts
+            
+            # For calls - find options with high volume
+            if not calls_df.empty and 'volume' in calls_df.columns:
+                # Sort by volume and take top options
+                top_calls = calls_df.sort_values('volume', ascending=False).head(3)
+                
+                # Add to unusual activity list
+                for _, row in top_calls.iterrows():
+                    if row['volume'] > 20:  # Only include significant volume
+                        premium = row['volume'] * row['lastPrice'] * 100  # Each contract is 100 shares
+                        
+                        if premium > 10000:  # Only include if premium is significant
+                            unusual_activity.append({
+                                'contract': f"{ticker} {row['strike']} {exp_date} CALL",
+                                'volume': int(row['volume']),
+                                'avg_price': float(row['lastPrice']),
+                                'premium': premium,
+                                'sentiment': 'bullish'
+                            })
+            
+            # For puts - similar analysis
+            if not puts_df.empty and 'volume' in puts_df.columns:
+                # Sort by volume and take top options
+                top_puts = puts_df.sort_values('volume', ascending=False).head(3)
+                
+                # Add to unusual activity list
+                for _, row in top_puts.iterrows():
+                    if row['volume'] > 20:  # Only include significant volume
+                        premium = row['volume'] * row['lastPrice'] * 100
+                        
+                        if premium > 10000:  # Only include if premium is significant
+                            unusual_activity.append({
+                                'contract': f"{ticker} {row['strike']} {exp_date} PUT",
+                                'volume': int(row['volume']),
+                                'avg_price': float(row['lastPrice']),
+                                'premium': premium,
+                                'sentiment': 'bearish'
+                            })
+            
+            # Sort by premium in descending order
+            if unusual_activity:
+                unusual_activity.sort(key=lambda x: x['premium'], reverse=True)
+                return unusual_activity[:5]
+                
+        except Exception as yf_error:
+            print(f"Yahoo Finance unusual activity final fallback also failed: {str(yf_error)}")
+            
         return None
 
 def get_simplified_unusual_activity_summary(ticker):
@@ -556,9 +881,26 @@ def get_simplified_unusual_activity_summary(ticker):
     if not ticker:
         return "Please specify a valid ticker symbol."
     
+    print(f"Using Polygon.io data for unusual activity summary for {ticker}")
     activity = get_unusual_options_activity(ticker)
     
     if not activity or len(activity) == 0:
+        # Let's try to provide some useful information from Yahoo Finance as a fallback
+        try:
+            import yfinance as yf
+            print(f"Fallback to Yahoo Finance for {ticker} options data")
+            stock = yf.Ticker(ticker)
+            # Get current price
+            current_price = stock.info.get('regularMarketPrice')
+            
+            # Format a basic response with some general options information
+            if current_price:
+                return f"📊 While specific unusual options activity for {ticker} is not available through our data provider, " \
+                       f"the current stock price is ${current_price:.2f}.\n\n" \
+                       f"For real-time options sentiment, consider checking volume patterns on your trading platform."
+        except Exception as e:
+            print(f"Yahoo Finance fallback also failed: {str(e)}")
+            
         return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
     
     # Determine overall sentiment
