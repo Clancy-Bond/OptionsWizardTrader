@@ -38,7 +38,8 @@ class OptionsBotNLP:
     
     def __init__(self):
         # Regex patterns for extracting information from queries
-        self.ticker_pattern = r'\b([A-Z]{1,5})\b'
+        # Specialized pattern for extracting tickers, improved to better handle context
+        self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Z]{1,5})(?!\w+\b)\b'
         self.strike_pattern = r'\$?(\d+(?:\.\d+)?)'
         self.expiry_pattern = r'(\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?)|(\d{1,2}[- ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[- ]\d{2,4})'
         self.option_type_pattern = r'\b(call|put)s?\b'
@@ -52,9 +53,9 @@ class OptionsBotNLP:
         """Parse a natural language query for options trading parameters"""
         query = query.lower()
         
-        # Extract ticker
-        ticker_match = re.search(self.ticker_pattern, query, re.IGNORECASE)
-        ticker = ticker_match.group(1).upper() if ticker_match else None
+        # Extract ticker using findall to get all matches (same as UnusualOptionsNLP)
+        ticker_matches = re.findall(self.ticker_pattern, query, re.IGNORECASE)
+        ticker = ticker_matches[0].upper() if ticker_matches else None
         
         # Extract strike price
         strike_match = re.search(self.strike_pattern, query)
