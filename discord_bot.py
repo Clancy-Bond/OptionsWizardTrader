@@ -344,8 +344,10 @@ class OptionsBot(commands.Bot):
                 import re
                 
                 # Look for the percentage pattern in overall flow
-                flow_pattern = r"Overall flow:\s*(\d+)%\s+bullish\s*[/]\s*(\d+)%\s+bearish"
+                # Updated pattern to better match the format "XX% bullish / YY% bearish"
+                flow_pattern = r"Overall flow:?\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
                 flow_match = re.search(flow_pattern, response_text, re.IGNORECASE)
+                print(f"Flow pattern check: '{response_text}' - Match: {flow_match is not None}")
                 
                 if flow_match:
                     # Extract percentages
@@ -451,8 +453,10 @@ class OptionsBot(commands.Bot):
             import re
             
             # Look for the percentage pattern in overall flow
-            flow_pattern = r"Overall flow:\s*(\d+)%\s+bullish\s*[/]\s*(\d+)%\s+bearish"
+            # Updated pattern to better match the format "XX% bullish / YY% bearish"
+            flow_pattern = r"Overall flow:?\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
             flow_match = re.search(flow_pattern, response_text, re.IGNORECASE)
+            print(f"Flow pattern check (both): '{response_text}' - Match: {flow_match is not None}")
             
             if flow_match:
                 # Extract percentages
