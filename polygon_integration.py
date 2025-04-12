@@ -1039,14 +1039,52 @@ def get_simplified_unusual_activity_summary(ticker):
                 summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish**\n"
                 summary += f"bet with "
                 
+            # Extract strike price
+            # Extract strike price from option symbol
+            strike_price = None
+            if 'symbol' in main_contract:
+                symbol = main_contract['symbol']
+                if symbol.startswith('O:'):
+                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
+                    match = re.search(r'[CP](\d{8})$', symbol)
+                    if match:
+                        strike_price = float(match.group(1)) / 1000
+            
+            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
+            if not strike_price and len(contract_parts) >= 1:
+                if contract_parts[0].replace('.', '', 1).isdigit():
+                    strike_price = float(contract_parts[0])
+                else:
+                    # Fallback to a default if we can't parse the strike
+                    strike_price = 0.0
+            
+            # Extract strike price
+            # Extract strike price from option symbol
+            strike_price = None
+            if 'symbol' in main_contract:
+                symbol = main_contract['symbol']
+                if symbol.startswith('O:'):
+                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
+                    match = re.search(r'[CP](\d{8})$', symbol)
+                    if match:
+                        strike_price = float(match.group(1)) / 1000
+            
+            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
+            if not strike_price and len(contract_parts) >= 1:
+                if contract_parts[0].replace('.', '', 1).isdigit():
+                    strike_price = float(contract_parts[0])
+                else:
+                    # Fallback to a default if we can't parse the strike
+                    strike_price = 0.0
+            
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${contract_parts[0]}.00) options expiring on {expiry_date}.\n\n"
+                    summary += f"in-the-money (${strike_price}.00) options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${contract_parts[0]}.00) options expiring soon.\n\n"
+                    summary += f"in-the-money (${strike_price}.00) options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
@@ -1096,14 +1134,52 @@ def get_simplified_unusual_activity_summary(ticker):
                 summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
                 summary += f"bet with "
                 
+            # Extract strike price
+            # Extract strike price from option symbol
+            strike_price = None
+            if 'symbol' in main_contract:
+                symbol = main_contract['symbol']
+                if symbol.startswith('O:'):
+                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
+                    match = re.search(r'[CP](\d{8})$', symbol)
+                    if match:
+                        strike_price = float(match.group(1)) / 1000
+            
+            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
+            if not strike_price and len(contract_parts) >= 1:
+                if contract_parts[0].replace('.', '', 1).isdigit():
+                    strike_price = float(contract_parts[0])
+                else:
+                    # Fallback to a default if we can't parse the strike
+                    strike_price = 0.0
+            
+            # Extract strike price
+            # Extract strike price from option symbol
+            strike_price = None
+            if 'symbol' in main_contract:
+                symbol = main_contract['symbol']
+                if symbol.startswith('O:'):
+                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
+                    match = re.search(r'[CP](\d{8})$', symbol)
+                    if match:
+                        strike_price = float(match.group(1)) / 1000
+            
+            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
+            if not strike_price and len(contract_parts) >= 1:
+                if contract_parts[0].replace('.', '', 1).isdigit():
+                    strike_price = float(contract_parts[0])
+                else:
+                    # Fallback to a default if we can't parse the strike
+                    strike_price = 0.0
+            
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${contract_parts[0]}.00) options expiring on {expiry_date}.\n\n"
+                    summary += f"in-the-money (${strike_price}.00) options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${contract_parts[0]}.00) options expiring soon.\n\n"
+                    summary += f"in-the-money (${strike_price}.00) options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
