@@ -1033,10 +1033,10 @@ def get_simplified_unusual_activity_summary(ticker):
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly strongly bullish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish** bet that\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish** bet that\n"
                 summary += f"occurred on {timestamp_str.split()[0]} with "
             else:
-                summary += f"• I'm seeing strongly strongly bullish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
                 summary += f"bet with "
                 
             # Add strike price and expiration
@@ -1052,10 +1052,10 @@ def get_simplified_unusual_activity_summary(ticker):
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly strongly bullish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish** bet that\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish** bet that\n"
                 summary += f"occurred on {timestamp_str.split()[0]} with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly strongly bullish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
                 summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
@@ -1090,10 +1090,10 @@ def get_simplified_unusual_activity_summary(ticker):
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly strongly bearish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish** bet that\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish** bet that\n"
                 summary += f"occurred on {timestamp_str.split()[0]} with "
             else:
-                summary += f"• I'm seeing strongly strongly bearish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
                 summary += f"bet with "
                 
             # Add strike price and expiration
@@ -1109,10 +1109,10 @@ def get_simplified_unusual_activity_summary(ticker):
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly strongly bearish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish** bet that\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish** bet that\n"
                 summary += f"occurred on {timestamp_str.split()[0]} with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly strongly bearish activity for {ticker}, Inc., Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
                 summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
