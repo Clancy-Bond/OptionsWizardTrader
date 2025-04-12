@@ -921,6 +921,9 @@ def get_simplified_unusual_activity_summary(ticker):
     """
     ticker = ticker.upper() if ticker else ""
     
+    # Initialize timestamp_str at the function level to avoid "possibly unbound" error
+    timestamp_str = ""
+    
     if not ticker:
         return "Please specify a valid ticker symbol."
     
