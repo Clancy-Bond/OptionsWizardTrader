@@ -695,8 +695,14 @@ def get_unusual_options_activity(ticker):
             data = response.json()
             trades = data.get('results', [])
             
-            # Look for large size trades (>20 contracts)
-            large_trades = [t for t in trades if t.get('size', 0) > 20]
+            # Print raw option data for debug
+            print(f"Found {len(trades)} trades for {option_symbol}")
+            
+            # Look for significant trades - lowering threshold to 5 contracts to catch more activity
+            # This is safe since we're already filtering for near-the-money options
+            large_trades = [t for t in trades if t.get('size', 0) >= 5]
+            if large_trades:
+                print(f"Found significant trade with size {max(t.get('size', 0) for t in large_trades)} for {option_symbol}")
             
             if large_trades:
                 # Calculate some metrics
@@ -781,6 +787,11 @@ def get_simplified_unusual_activity_summary(ticker):
     # Determine overall sentiment
     bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
     bearish_count = sum(1 for item in activity if item.get('sentiment') == 'bearish')
+    
+    # Debug information about the sentiment counts
+    print(f"Found {bullish_count} bullish and {bearish_count} bearish options for {ticker}")
+    for idx, item in enumerate(activity):
+        print(f"  Option {idx+1}: {item.get('contract', 'Unknown')} - Sentiment: {item.get('sentiment', 'Unknown')}")
     
     if bullish_count > bearish_count:
         overall_sentiment = "bullish"
