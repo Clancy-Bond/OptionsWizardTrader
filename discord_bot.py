@@ -2,6 +2,9 @@ import os
 import re
 import discord
 import json
+import random
+import datetime
+from dateutil.parser import parse
 from discord.ext import commands
 from dotenv import load_dotenv
 import technical_analysis
@@ -202,114 +205,31 @@ class OptionsBot(commands.Bot):
             await self.handle_unusual_activity_for_both(message, parsed)
             return
             
-        # Call unusual activity module
-        result = unusual_activity.detect_unusual_activity(
-            ticker=parsed['ticker'],
-            option_type=parsed['option_type']
-        )
+        # Get the simplified unusual activity summary
+        response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
         
-        # Format response as Discord embed - simplified format similar to the screenshot
+        # Format response as Discord embed
         embed = discord.Embed(
-            title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
             color=discord.Color.purple()
         )
         
-        if result['unusual_activity_detected']:
-            # Create a more conversational format
-            sentiment_text = result['sentiment'].lower() if 'sentiment' in result else 'bearish'
-            
-            # Generate flow values - using random data for illustration
-            bullish_pct = random.randint(5, 40) if 'bearish' in sentiment_text else random.randint(60, 95)
-            bearish_pct = 100 - bullish_pct
-            
-            # Generate largest trade value
-            trade_value = random.randint(5, 300)
-            strike_price = random.randint(300, 500)
-            days_ahead = random.randint(5, 30)
-            expiry_date = (datetime.datetime.now() + datetime.timedelta(days=days_ahead)).strftime("%Y-%m-%d")
-            
-            # Format in the style of the screenshot with bullet points
-            description = f"• I'm seeing {sentiment_text} activity for {parsed['ticker']}, Inc.. The largest flow is a "
-            description += f"**${trade_value}.{random.randint(1,9)} million {sentiment_text}** bet "
-            description += f"with {'in' if random.choice([True, False]) else 'out-of'}-the-money (${strike_price}.00) options expiring on {expiry_date}.\n\n"
-            
-            # Add institutional flow bullet point  
-            description += f"• Institutional investors are positioning for {'losses' if 'bearish' in sentiment_text else 'gains'} "
-            description += f"with {'put' if 'bearish' in sentiment_text else 'call'} options volume {result['volume_oi_ratio']:.1f}x the open interest.\n\n"
-            
-            # Add overall flow information
-            description += f"**Overall flow:** {bullish_pct}% bullish / {bearish_pct}% bearish"
-            
-            embed.description = description
-        else:
-            embed.description = f"No unusual options activity detected for {parsed['ticker']} {parsed['option_type']}s at this time."
+        # Use the formatted text directly from the summary
+        embed.description = response_text
             
         await message.channel.send(embed=embed)
         
     async def handle_unusual_activity_for_both(self, message, parsed):
         """Handle unusual options activity requests for both calls and puts"""
-        # Check calls
-        call_result = unusual_activity.detect_unusual_activity(
-            ticker=parsed['ticker'],
-            option_type='call'
-        )
-        
-        # Check puts
-        put_result = unusual_activity.detect_unusual_activity(
-            ticker=parsed['ticker'],
-            option_type='put'
-        )
+        # Get the simplified unusual activity summary - the same function works for "both"
+        response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
         
         # Format response as Discord embed
         embed = discord.Embed(
-            title=f"🐳 Unusual Options Activity: {parsed['ticker']} (CALLS & PUTS)",
             color=discord.Color.purple()
         )
         
-        # Add call information
-        embed.add_field(name="📈 CALLS", value="Results for call options:", inline=False)
-        if call_result['unusual_activity_detected']:
-            embed.add_field(name="Activity Level", value=call_result['activity_level'], inline=True)
-            embed.add_field(name="Volume/OI Ratio", value=f"{call_result['volume_oi_ratio']:.2f}x normal", inline=True)
-            embed.add_field(name="Sentiment", value=call_result['sentiment'], inline=True)
-            
-            if 'large_trades' in call_result and call_result['large_trades']:
-                large_trades = "\n".join([f"- {trade}" for trade in call_result['large_trades']])
-                embed.add_field(name="Notable Call Trades", value=large_trades, inline=False)
-        else:
-            embed.add_field(name="Call Activity", value="No unusual call options activity detected.", inline=False)
-        
-        # Add put information
-        embed.add_field(name="📉 PUTS", value="Results for put options:", inline=False)
-        if put_result['unusual_activity_detected']:
-            embed.add_field(name="Activity Level", value=put_result['activity_level'], inline=True)
-            embed.add_field(name="Volume/OI Ratio", value=f"{put_result['volume_oi_ratio']:.2f}x normal", inline=True)
-            embed.add_field(name="Sentiment", value=put_result['sentiment'], inline=True)
-            
-            if 'large_trades' in put_result and put_result['large_trades']:
-                large_trades = "\n".join([f"- {trade}" for trade in put_result['large_trades']])
-                embed.add_field(name="Notable Put Trades", value=large_trades, inline=False)
-        else:
-            embed.add_field(name="Put Activity", value="No unusual put options activity detected.", inline=False)
-            
-        # Overall sentiment summary
-        if call_result['unusual_activity_detected'] or put_result['unusual_activity_detected']:
-            if call_result['unusual_activity_detected'] and not put_result['unusual_activity_detected']:
-                overall = "🔹 Bullish bias (unusual call activity only)"
-            elif not call_result['unusual_activity_detected'] and put_result['unusual_activity_detected']:
-                overall = "🔸 Bearish bias (unusual put activity only)"
-            else:
-                # Both have activity, compare volume/OI ratios
-                if call_result['volume_oi_ratio'] > put_result['volume_oi_ratio'] * 1.5:
-                    overall = "🔹 Bullish bias (higher call activity)"
-                elif put_result['volume_oi_ratio'] > call_result['volume_oi_ratio'] * 1.5:
-                    overall = "🔸 Bearish bias (higher put activity)"
-                else:
-                    overall = "◼️ Mixed sentiment (similar call and put activity)"
-                    
-            embed.add_field(name="Overall Market Sentiment", value=overall, inline=False)
-        else:
-            embed.add_field(name="Overall Market Sentiment", value="No significant unusual options activity detected", inline=False)
+        # Use the formatted text directly from the summary
+        embed.description = response_text
             
         await message.channel.send(embed=embed)
 
