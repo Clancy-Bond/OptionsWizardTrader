@@ -30,9 +30,11 @@ def get_headers():
     }
     
 import time
-# Global tracker for rate limiting
+# Global trackers for rate limiting
 _last_api_call = 0
-_min_call_interval = 0.2  # Minimum seconds between API calls
+_min_call_interval = 0.6  # More conservative minimum seconds between API calls
+_consecutive_calls = 0
+_max_retries = 5
 
 def handle_rate_limit(retry_after=1):
     """
@@ -44,45 +46,84 @@ def handle_rate_limit(retry_after=1):
     print(f"Rate limited by Polygon API, waiting {retry_after} seconds...")
     time.sleep(retry_after)
     
-def throttled_api_call(url, headers=None):
+def throttled_api_call(url, headers=None, retry_count=0):
     """
     Make an API call with built-in throttling to avoid rate limits
     
     Args:
         url: The URL to call
         headers: Optional headers dictionary
+        retry_count: Current retry attempt (internal tracking)
         
     Returns:
         Response object from requests
     """
-    global _last_api_call, _min_call_interval
+    global _last_api_call, _min_call_interval, _consecutive_calls, _max_retries
+    
+    # Safety check for excessive retries
+    if retry_count > _max_retries:
+        print(f"Maximum retries ({_max_retries}) exceeded for URL: {url}")
+        # Return a simulated response with error status
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 500
+                self.text = "Maximum retries exceeded"
+            def json(self):
+                return {"error": "Maximum retries exceeded"}
+        return MockResponse()
     
     # Calculate time since last API call
     now = time.time()
     time_since_last_call = now - _last_api_call
     
+    # Adaptive delay - increase wait time as consecutive calls increase
+    adaptive_delay = _min_call_interval * (1 + min(_consecutive_calls // 5, 5))
+    
     # If we've made a call too recently, sleep to avoid rate limiting
-    if time_since_last_call < _min_call_interval:
-        sleep_time = _min_call_interval - time_since_last_call
+    if time_since_last_call < adaptive_delay:
+        sleep_time = adaptive_delay - time_since_last_call
         time.sleep(sleep_time)
     
     # Make the API call
-    response = requests.get(url, headers=headers)
-    
-    # Debug log for 403 errors
-    if response.status_code == 403:
-        print(f"403 Forbidden error for URL: {url}")
-        print(f"Response: {response.text}")
-    
-    # Update last call time
-    _last_api_call = time.time()
-    
-    # Handle rate limiting
-    if response.status_code == 429:
-        handle_rate_limit(3)  # Wait 3 seconds
-        return throttled_api_call(url, headers)  # Retry the call
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
         
-    return response
+        # Debug log for 403 errors
+        if response.status_code == 403:
+            print(f"403 Forbidden error for URL: {url}")
+            print(f"Response: {response.text}")
+            # Reset consecutive calls counter
+            _consecutive_calls = 0
+        elif response.status_code == 200:
+            # Successful call
+            _consecutive_calls += 1
+        
+        # Update last call time
+        _last_api_call = time.time()
+        
+        # Handle rate limiting with exponential backoff
+        if response.status_code == 429:
+            # Each retry waits longer (3, 6, 12, 24, 48 seconds...)
+            backoff_delay = 3 * (2 ** retry_count)
+            handle_rate_limit(backoff_delay)
+            # Reset consecutive calls counter
+            _consecutive_calls = 0
+            # Retry with incremented counter
+            return throttled_api_call(url, headers, retry_count + 1)
+            
+        return response
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {str(e)}")
+        # Reset consecutive calls counter
+        _consecutive_calls = 0
+        # Wait before retry
+        time.sleep(3)
+        return throttled_api_call(url, headers, retry_count + 1)
+    except Exception as e:
+        print(f"Unexpected error in API call: {str(e)}")
+        _consecutive_calls = 0
+        return None
 
 def fetch_all_tickers():
     """

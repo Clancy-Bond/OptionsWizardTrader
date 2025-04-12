@@ -187,24 +187,79 @@ import polygon_integration as polygon
 def fetch_all_tickers():
     """
     Fetch a comprehensive list of all stock tickers from major exchanges.
-    This function will use Polygon.io API to fetch tickers.
+    This function will use Polygon.io API to fetch tickers only on the 5th day of each month.
     
     Returns:
         A set of valid ticker symbols
     """
-    # Try to use Polygon API first (much more comprehensive)
-    try:
-        # Check if we have a Polygon API key
-        if os.getenv('POLYGON_API_KEY'):
-            print("Using Polygon.io API to fetch comprehensive ticker list...")
+    polygon_cache_path = 'polygon_tickers.json'
+    need_refresh = False
+    today = datetime.now()
+    
+    # First check if we have a cache file
+    if os.path.exists(polygon_cache_path):
+        try:
+            with open(polygon_cache_path, 'r') as f:
+                cached_tickers = json.load(f)
+                
+            # Check if today is the 5th of the month for a scheduled refresh
+            if today.day == 5:
+                print(f"Today is the 5th of the month: scheduled ticker refresh day")
+                need_refresh = True
+            else:
+                # Use the cached data
+                print(f"Using cached Polygon ticker list (updates on the 5th of each month)...")
+                if cached_tickers and len(cached_tickers) > 100:
+                    # Update our in-memory cache
+                    VALIDATED_TICKERS.update(cached_tickers)
+                    return set(cached_tickers)
+                else:
+                    # Cache exists but appears invalid
+                    print("Cached ticker list appears invalid (too few entries)")
+                    # Only refresh on the 5th, otherwise use what we have
+                    if today.day != 5:
+                        return set(cached_tickers)
+                    need_refresh = True
+        except Exception as e:
+            print(f"Error loading cached tickers: {str(e)}")
+            # Only refresh on the 5th, otherwise create an empty cache
+            if today.day == 5:
+                need_refresh = True
+            else:
+                print("Not the 5th of month, using minimal ticker set until next refresh day")
+                return set(COMMON_INDICES)  # Return predefined list
+    else:
+        # No cache exists
+        if today.day == 5:
+            print("No ticker cache found and today is refresh day (5th of month)")
+            need_refresh = True
+        else:
+            print("No ticker cache found but today is not refresh day (5th of month)")
+            print("Using predefined ticker list until next scheduled refresh")
+            return set(COMMON_INDICES)  # Return predefined list
+        
+    # If today is the 5th of the month and we need a refresh, update from Polygon.io
+    if need_refresh and today.day == 5 and os.getenv('POLYGON_API_KEY'):
+        try:
+            print("Today is the 5th: Using Polygon.io API to fetch comprehensive ticker list...")
             polygon_tickers = polygon.fetch_all_tickers()
             if polygon_tickers and len(polygon_tickers) > 100:
                 print(f"Successfully fetched {len(polygon_tickers)} tickers from Polygon.io")
                 # Update our cache
                 VALIDATED_TICKERS.update(polygon_tickers)
                 return polygon_tickers
-    except Exception as e:
-        print(f"Error using Polygon API: {str(e)}")
+        except Exception as e:
+            print(f"Error using Polygon API on monthly refresh: {str(e)}")
+            # Try to use existing cache despite errors
+            try:
+                if os.path.exists(polygon_cache_path):
+                    with open(polygon_cache_path, 'r') as f:
+                        cached_tickers = json.load(f)
+                    if cached_tickers:
+                        print("Using existing cache despite refresh error")
+                        return set(cached_tickers)
+            except:
+                pass
     
     # Fall back to our original method if Polygon fails
     print("Falling back to Yahoo Finance method for tickers...")
@@ -343,8 +398,12 @@ def is_valid_ticker(ticker):
     if ticker in COMMON_WORDS:
         return False
     
-    # Try Polygon.io API first if available
-    if os.getenv('POLYGON_API_KEY'):
+    # Check if we have any cached ticker list from files
+    today = datetime.now()
+    
+    # Only use Polygon API validation on the 5th or if cache doesn't exist
+    # to prevent excessive API calls for ticker validation
+    if os.getenv('POLYGON_API_KEY') and (today.day == 5 or not os.path.exists('polygon_tickers.json')):
         try:
             if polygon.is_valid_ticker(ticker):
                 # It's a valid ticker - add to cache
@@ -354,7 +413,25 @@ def is_valid_ticker(ticker):
         except Exception as e:
             print(f"Error with Polygon validation for {ticker}: {str(e)}")
     
-    # Fall back to Yahoo Finance if Polygon fails or isn't available
+    # Attempt to load and check against cached ticker list first before making any API calls
+    try:
+        if os.path.exists('polygon_tickers.json'):
+            with open('polygon_tickers.json', 'r') as f:
+                cached_tickers = json.load(f)
+                if ticker in cached_tickers:
+                    VALIDATED_TICKERS.add(ticker)
+                    return True
+        
+        if os.path.exists('valid_tickers.json'):
+            with open('valid_tickers.json', 'r') as f:
+                cached_tickers = json.load(f)
+                if ticker in cached_tickers:
+                    VALIDATED_TICKERS.add(ticker)
+                    return True
+    except Exception as e:
+        print(f"Error checking ticker against cache files: {str(e)}")
+    
+    # Fall back to Yahoo Finance only if the above checks fail
     try:
         # Try a quick info lookup for a known field (faster than full info)
         # Just check if we can get price data
@@ -362,9 +439,21 @@ def is_valid_ticker(ticker):
         hist = stock.history(period="1d")
         
         if not hist.empty:
-            # It's a valid ticker - add to cache
+            # It's a valid ticker - add to cache and save to backup file
             VALIDATED_TICKERS.add(ticker)
             print(f"Yahoo validated and cached ticker: {ticker}")
+            # Try to append to valid_tickers.json to save the validation
+            try:
+                current_tickers = []
+                if os.path.exists('valid_tickers.json'):
+                    with open('valid_tickers.json', 'r') as f:
+                        current_tickers = json.load(f)
+                if ticker not in current_tickers:
+                    current_tickers.append(ticker)
+                    with open('valid_tickers.json', 'w') as f:
+                        json.dump(current_tickers, f)
+            except:
+                pass  # Silently fail if we can't update the cache file
             return True
         return False
     except Exception as e:
