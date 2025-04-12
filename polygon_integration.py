@@ -8,6 +8,7 @@ import requests
 import json
 from datetime import datetime
 from dotenv import load_dotenv
+from polygon_trades import get_option_trade_data
 
 # Load environment variables
 load_dotenv()
@@ -1370,10 +1371,35 @@ def get_simplified_unusual_activity_summary(ticker):
                     emoji = "🟢" if biggest_option['sentiment'] == 'bullish' else "🔴"
                     premium_millions = biggest_option['premium'] / 1000000
                     
+                    # Try to get real transaction date for this option
+                    transaction_date = None
+                    try:
+                        # Create the option symbol in Polygon format
+                        strike_price_padded = f"{biggest_option['strike']:08.0f}"
+                        option_date = datetime.strptime(biggest_option['expiry'], '%Y-%m-%d')
+                        option_date_str = option_date.strftime('%y%m%d')
+                        option_type_char = 'C' if biggest_option['sentiment'] == 'bullish' else 'P'
+                        option_symbol = f"O:{ticker}{option_date_str}{option_type_char}{strike_price_padded}"
+                        
+                        print(f"Looking up trades for option symbol: {option_symbol}")
+                        trade_data = get_option_trade_data(option_symbol)
+                        if trade_data and 'date' in trade_data:
+                            transaction_date = trade_data['date']
+                            print(f"Found transaction date: {transaction_date}")
+                    except Exception as e:
+                        print(f"Error getting option trade data: {str(e)}")
+                    
                     # Add first bullet point about biggest flow
                     response += f"• I'm seeing {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
                     response += f"**${premium_millions:.1f} million {biggest_option['sentiment']}** "
-                    response += f"bet with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
+                    
+                    # Include transaction date if we found it
+                    if transaction_date:
+                        response += f"bet made on {transaction_date} with "
+                    else:
+                        response += f"bet with "
+                        
+                    response += f"{'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
                     response += f"(${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
                 
                 # Add institutional investors bullet if we have volume data
