@@ -6,6 +6,7 @@ import datetime
 import os
 from dateutil.parser import parse
 import polygon_integration as polygon
+from polygon_trades import get_option_trade_data
 
 def detect_unusual_activity(ticker, option_type):
     """
@@ -293,7 +294,12 @@ def get_simplified_unusual_activity_summary(ticker):
             emoji = "🟢" if "bullish" in sentiment else "🔴" if "bearish" in sentiment else "⚪"
             
             response += f"{emoji} {contract}:\n"
-            response += f"   {volume} contracts (${item['amount']:,.0f} premium)\n"
+            
+            # If we have a transaction date (from Polygon real trade data), include it
+            if 'transaction_date' in item:
+                response += f"   {volume} contracts on {item['transaction_date']} (${item['amount']:,.0f} premium)\n"
+            else:
+                response += f"   {volume} contracts (${item['amount']:,.0f} premium)\n"
         
         # Add explanation based on sentiment
         if "BULLISH" in overall_sentiment:
