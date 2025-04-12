@@ -341,7 +341,7 @@ class OptionsBot(commands.Bot):
             
         # Add timestamp to all responses
         from datetime import datetime
-        embed.timestamp = datetime.now()
+        # No timestamp
             
         await message.channel.send(embed=embed)
         
@@ -422,7 +422,7 @@ class OptionsBot(commands.Bot):
             
         # Add timestamp to all responses
         from datetime import datetime
-        embed.timestamp = datetime.now()
+        # No timestamp
             
         await message.channel.send(embed=embed)
 
