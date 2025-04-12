@@ -6,7 +6,7 @@ for stock and options data retrieval.
 import os
 import requests
 import json
-import datetime
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -184,79 +184,118 @@ def throttled_api_call(url, headers=None, retry_count=0):
 def fetch_all_tickers():
     """
     Fetch a comprehensive list of all stock tickers from Polygon.io
-    This function gets all active tickers across major exchanges
+    This function gets all active tickers across major exchanges,
+    but ONLY refreshes the ticker list on the 5th day of the month.
     
     Returns:
         A set of valid ticker symbols
     """
-    print("Fetching comprehensive ticker list from Polygon.io...")
+    today = datetime.now()
     all_tickers = set()
     
-    try:
-        # Endpoint for ticker types
-        types = ['CS', 'ETF']  # Common Stock and ETFs
-        for ticker_type in types:
-            endpoint = f"{BASE_URL}/v3/reference/tickers?type={ticker_type}&active=true&limit=1000&apiKey={POLYGON_API_KEY}"
+    # Check if we should fetch new tickers (only on the 5th of the month)
+    refresh_tickers = today.day == 5
+    
+    # Try to load from existing cache file first, regardless of day
+    if os.path.exists('polygon_tickers.json'):
+        try:
+            with open('polygon_tickers.json', 'r') as f:
+                cached_tickers = json.load(f)
+            all_tickers.update(cached_tickers)
+            valid_ticker_cache.update(cached_tickers)
+            print(f"Loaded {len(cached_tickers)} tickers from polygon_tickers.json cache")
             
-            # Make initial request with throttling
-            response = throttled_api_call(endpoint, headers=get_headers())
-            if response.status_code != 200:
-                print(f"Error fetching tickers: {response.status_code} - {response.text}")
-                continue
-            
-            data = response.json()
-            
-            # Add tickers from first page
-            results = data.get('results', [])
-            for item in results:
-                ticker = item.get('ticker')
-                if ticker:
-                    all_tickers.add(ticker)
-            
-            # Paginate through remaining results if more pages exist
-            next_url = data.get('next_url')
-            page_count = 1
-            
-            while next_url and page_count < 5:  # Limit to 5 pages to avoid excessive API usage
-                full_url = f"{next_url}&apiKey={POLYGON_API_KEY}"
-                # Use throttled API call for pagination too
-                response = throttled_api_call(full_url)
+            # If it's not the 5th of the month, return the cached tickers
+            if not refresh_tickers:
+                print("Not the 5th of month - using cached ticker list without refresh")
+                return all_tickers
+        except Exception as e:
+            print(f"Error loading cached tickers: {str(e)}")
+            # Even if there's an error, only try to refresh on the 5th
+            if not refresh_tickers:
+                print("Not the 5th of month - unable to refresh ticker list")
+                return all_tickers
+    elif not refresh_tickers:
+        # If no cache exists and it's not the 5th, we can't refresh
+        print("No ticker cache found and not the 5th of month - cannot refresh")
+        return all_tickers
+    
+    # If we reach here, it's the 5th of the month or cache doesn't exist but it's the 5th
+    if refresh_tickers:
+        print(f"Today is the 5th of the month: Refreshing comprehensive ticker list from Polygon.io...")
+        
+        try:
+            # Endpoint for ticker types
+            types = ['CS', 'ETF']  # Common Stock and ETFs
+            for ticker_type in types:
+                endpoint = f"{BASE_URL}/v3/reference/tickers?type={ticker_type}&active=true&limit=1000&apiKey={POLYGON_API_KEY}"
                 
+                # Make initial request with throttling
+                response = throttled_api_call(endpoint, headers=get_headers())
                 if response.status_code != 200:
-                    print(f"Error fetching page {page_count+1}: {response.status_code}")
-                    break
+                    print(f"Error fetching tickers: {response.status_code} - {response.text}")
+                    continue
                 
                 data = response.json()
+                
+                # Add tickers from first page
                 results = data.get('results', [])
                 for item in results:
                     ticker = item.get('ticker')
                     if ticker:
                         all_tickers.add(ticker)
                 
+                # Paginate through remaining results if more pages exist
                 next_url = data.get('next_url')
-                page_count += 1
-                print(f"Processed page {page_count} - Total tickers: {len(all_tickers)}")
-        
-        # Save to cache file for future use
-        try:
-            with open('polygon_tickers.json', 'w') as f:
-                json.dump(list(all_tickers), f)
-            print(f"Saved {len(all_tickers)} tickers to polygon_tickers.json")
-        except Exception as e:
-            print(f"Error saving tickers: {str(e)}")
+                page_count = 1
+                
+                while next_url and page_count < 5:  # Limit to 5 pages to avoid excessive API usage
+                    full_url = f"{next_url}&apiKey={POLYGON_API_KEY}"
+                    # Use throttled API call for pagination too
+                    response = throttled_api_call(full_url)
+                    
+                    if response.status_code != 200:
+                        print(f"Error fetching page {page_count+1}: {response.status_code}")
+                        break
+                    
+                    data = response.json()
+                    results = data.get('results', [])
+                    for item in results:
+                        ticker = item.get('ticker')
+                        if ticker:
+                            all_tickers.add(ticker)
+                    
+                    next_url = data.get('next_url')
+                    page_count += 1
+                    print(f"Processed page {page_count} - Total tickers: {len(all_tickers)}")
             
-    except Exception as e:
-        print(f"Error during Polygon ticker fetching: {str(e)}")
-        
-        # Try to load from backup file
-        try:
-            if os.path.exists('polygon_tickers.json'):
-                with open('polygon_tickers.json', 'r') as f:
-                    cached_tickers = json.load(f)
-                all_tickers.update(cached_tickers)
-                print(f"Loaded {len(cached_tickers)} tickers from backup file")
-        except Exception as backup_error:
-            print(f"Error loading backup ticker list: {str(backup_error)}")
+            # Only save to cache file if we got a substantial number of tickers
+            if len(all_tickers) > 100:
+                try:
+                    with open('polygon_tickers.json', 'w') as f:
+                        json.dump(list(all_tickers), f)
+                    print(f"Saved {len(all_tickers)} tickers to polygon_tickers.json")
+                except Exception as e:
+                    print(f"Error saving tickers: {str(e)}")
+            else:
+                print(f"Insufficient tickers found ({len(all_tickers)}), not updating cache")
+                
+        except Exception as e:
+            print(f"Error during Polygon ticker fetching: {str(e)}")
+            
+            # If we have cached tickers already loaded, use those
+            if all_tickers:
+                print(f"Using previously loaded {len(all_tickers)} cached tickers despite refresh error")
+            else:
+                # Try to load from backup file as a last resort
+                try:
+                    if os.path.exists('polygon_tickers.json'):
+                        with open('polygon_tickers.json', 'r') as f:
+                            cached_tickers = json.load(f)
+                        all_tickers.update(cached_tickers)
+                        print(f"Loaded {len(cached_tickers)} tickers from backup file")
+                except Exception as backup_error:
+                    print(f"Error loading backup ticker list: {str(backup_error)}")
     
     # Update the in-memory cache
     valid_ticker_cache.update(all_tickers)
@@ -913,7 +952,7 @@ def get_unusual_options_activity(ticker):
         return None
     
     ticker = ticker.upper()
-    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     
     try:
         # Get options for today's date
