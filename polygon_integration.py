@@ -1105,14 +1105,31 @@ def get_unusual_options_activity(ticker):
                         sentiment = 'bullish'
                     elif contract_type == 'put':
                         sentiment = 'bearish'
+                    
+                    # Get the actual transaction date if available
+                    # We'll use our polygon_trades module to get the most significant trade
+                    from polygon_trades import get_option_trade_data
+                    
+                    trade_info = None
+                    try:
+                        trade_info = get_option_trade_data(option_symbol)
+                    except Exception as e:
+                        print(f"Error getting trade data for {option_symbol}: {str(e)}")
                         
-                    unusual_activity.append({
+                    # Create activity entry with or without transaction date
+                    activity_entry = {
                         'contract': f"{ticker} {strike} {expiry} {contract_type.upper()}",
                         'volume': total_volume,
                         'avg_price': avg_price,
                         'premium': total_premium,
                         'sentiment': sentiment
-                    })
+                    }
+                    
+                    # Add transaction date if we have it
+                    if trade_info and 'date' in trade_info:
+                        activity_entry['transaction_date'] = trade_info['date']
+                        
+                    unusual_activity.append(activity_entry)
         
         # If we got too many 403 errors, try Yahoo Finance as a fallback
         if forbidden_error_count > 5 and len(unusual_activity) == 0:

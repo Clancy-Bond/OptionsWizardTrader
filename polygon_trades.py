@@ -20,7 +20,9 @@ def get_option_trade_data(option_symbol, min_size=5):
         min_size: Minimum trade size to consider significant
         
     Returns:
-        Dictionary with trade data including date, price, and size
+        Dictionary with trade data including date, price, and size if available
+        Returns a dict with just price if the option exists but has no trade history
+        Returns None if the option doesn't exist or there was an error
     """
     try:
         # Use a larger limit to find a significant trade
@@ -36,22 +38,20 @@ def get_option_trade_data(option_symbol, min_size=5):
         data = response.json()
         trades = data.get('results', [])
         
-        if not trades:
-            return None
-            
-        # Look for a significant trade (by size)
-        significant_trade = None
-        for trade in trades:
-            size = trade.get('size', 0)
-            if size >= min_size:
-                significant_trade = trade
-                break
+        # If there are trades available, get the most significant one
+        if trades:
+            # Look for a significant trade (by size)
+            significant_trade = None
+            for trade in trades:
+                size = trade.get('size', 0)
+                if size >= min_size:
+                    significant_trade = trade
+                    break
+                    
+            # If no significant trade found, use the most recent one
+            if not significant_trade:
+                significant_trade = trades[0]
                 
-        # If no significant trade found, use the most recent one
-        if not significant_trade and trades:
-            significant_trade = trades[0]
-            
-        if significant_trade:
             # Get timestamp (prefer participant_timestamp if available)
             timestamp = significant_trade.get('participant_timestamp') or significant_trade.get('sip_timestamp')
             
@@ -65,6 +65,17 @@ def get_option_trade_data(option_symbol, min_size=5):
                     'price': significant_trade.get('price'),
                     'size': significant_trade.get('size')
                 }
+            
+            # If we have a trade but no timestamp (unlikely), just return price and size
+            return {
+                'price': significant_trade.get('price'),
+                'size': significant_trade.get('size')
+            }
+        
+        # For future-dated options or those without trade history,
+        # we return an empty dict which indicates the option exists
+        # but we don't have historical trades
+        return {}
     
     except Exception as e:
         print(f"Error getting option trade data for {option_symbol}: {str(e)}")
