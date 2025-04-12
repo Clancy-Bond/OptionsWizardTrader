@@ -39,7 +39,7 @@ This platform combines a powerful options price calculator with an intelligent D
 st.header("Discord Bot Status")
 
 # Check if Discord token is configured
-discord_token = os.getenv('DISCORD_TOKEN')
+discord_token = os.getenv('DISCORD_TOKEN_2')
 if discord_token:
     st.success("✅ Discord Bot is configured and ready to use")
     
@@ -94,13 +94,13 @@ Always do your own research before making investment decisions.
 # Functions needed for the Discord Bot Configuration page
 def check_discord_token():
     """Check if Discord token is set in environment variables"""
-    token = os.getenv("DISCORD_TOKEN")
+    token = os.getenv("DISCORD_TOKEN_2")
     return token is not None and token != ""
 
 def update_discord_token(token):
     """Update Discord token in environment variable and .env file"""
     # Update in-memory environment variable
-    os.environ["DISCORD_TOKEN"] = token
+    os.environ["DISCORD_TOKEN_2"] = token
     
     # Update .env file
     env_file = ".env"
@@ -110,18 +110,18 @@ def update_discord_token(token):
         
         token_set = False
         for i, line in enumerate(lines):
-            if line.startswith("DISCORD_TOKEN="):
-                lines[i] = f"DISCORD_TOKEN={token}\n"
+            if line.startswith("DISCORD_TOKEN_2="):
+                lines[i] = f"DISCORD_TOKEN_2={token}\n"
                 token_set = True
                 break
         
         if not token_set:
-            lines.append(f"DISCORD_TOKEN={token}\n")
+            lines.append(f"DISCORD_TOKEN_2={token}\n")
         
         with open(env_file, "w") as f:
             f.writelines(lines)
     else:
         with open(env_file, "w") as f:
-            f.write(f"DISCORD_TOKEN={token}\n")
+            f.write(f"DISCORD_TOKEN_2={token}\n")
     
     return True

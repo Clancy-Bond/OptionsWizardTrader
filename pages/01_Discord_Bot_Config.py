@@ -197,10 +197,10 @@ def save_permissions(permissions):
 
 
 # Discord token handling
-discord_token = os.getenv('DISCORD_TOKEN')
+discord_token = os.getenv('DISCORD_TOKEN_2')
 
 if not discord_token:
-    st.error("Discord token not found. Please set the DISCORD_TOKEN environment variable.")
+    st.error("Discord token not found. Please set the DISCORD_TOKEN_2 environment variable.")
     
     # Discord token input with custom styling
     st.markdown('<div class="discord-header"><h3>Bot Token Setup</h3></div>', unsafe_allow_html=True)
@@ -221,7 +221,7 @@ if not discord_token:
         if submit_button and token_input:
             # Create or update the .env file with the token
             with open(".env", "a") as f:
-                f.write(f"\nDISCORD_TOKEN={token_input}")
+                f.write(f"\nDISCORD_TOKEN_2={token_input}")
             st.success("Token saved! Please restart the application.")
             st.rerun()
 else:
@@ -293,7 +293,7 @@ else:
                     lines = f.readlines()
                 with open(".env", "w") as f:
                     for line in lines:
-                        if not line.startswith("DISCORD_TOKEN="):
+                        if not line.startswith("DISCORD_TOKEN_2="):
                             f.write(line)
                 st.warning("Token reset! Please enter a new token.")
                 st.rerun()
