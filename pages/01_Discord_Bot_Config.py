@@ -53,78 +53,166 @@ load_dotenv()
 # Display theme selector in sidebar
 display_theme_selector()
 
-# Custom CSS to make it look more like Discord
+# Custom CSS to match the reference screenshots
 st.markdown("""
 <style>
+    /* Main background override */
+    .stApp {
+        background-color: #1e1f22 !important;  /* Darker Discord background */
+    }
+    
+    /* Header styling */
     .discord-header {
-        background-color: #36393f;
+        background-color: #2b2d31;
         color: white;
-        padding: 10px;
-        border-radius: 5px;
+        padding: 12px 15px;
+        border-radius: 8px;
         margin-bottom: 20px;
+        border: 1px solid #1e1f22;
     }
+    
+    /* Channel styling */
     .discord-channel {
-        background-color: #2f3136;
+        background-color: #2b2d31;
         color: #dcddde;
-        padding: 10px;
+        padding: 12px 15px;
         border-radius: 5px;
-        margin-bottom: 5px;
+        margin-bottom: 8px;
+        border: 1px solid #1e1f22;
     }
+    
+    /* Category styling */
     .discord-category {
-        background-color: #2f3136;
+        background-color: #2b2d31;
         color: white;
-        padding: 10px;
+        padding: 12px 15px;
         border-radius: 5px;
-        margin-bottom: 5px;
+        margin-bottom: 8px;
         font-weight: bold;
+        border: 1px solid #1e1f22;
+        text-transform: uppercase;
     }
+    
+    /* Channel icon */
     .channel-icon {
-        color: #8e9297;
-        margin-right: 5px;
+        color: #72767d;
+        margin-right: 8px;
     }
+    
+    /* Button containers */
     .toggle-container {
-        background-color: #36393f;
-        padding: 5px 10px;
+        background-color: #2b2d31;
+        padding: 8px 12px;
         border-radius: 5px;
-        margin: 5px 0;
+        margin: 8px 0;
+        display: inline-block;
     }
+    
+    /* Server header styling */
     .server-header {
-        background-color: #36393f;
+        background-color: #2b2d31;
         color: white;
         padding: 15px;
-        border-radius: 5px;
+        border-radius: 8px;
         margin: 15px 0;
         font-size: 18px;
+        border: 1px solid #1e1f22;
     }
-    .discord-button {
-        background-color: #5865F2;
-        color: white;
-        border: none;
-        border-radius: 3px;
-        padding: 8px 16px;
-        margin: 5px 0;
-        cursor: pointer;
+    
+    /* Button styling */
+    .stButton > button {
+        background-color: #4e5058 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 4px !important;
+        font-weight: 500 !important;
     }
+    
+    /* Active button styling */
+    .stButton > button:hover {
+        background-color: #5865F2 !important;
+    }
+    
+    /* Save button styling */
+    button[data-testid="baseButton-secondary"] {
+        background-color: #5865F2 !important;
+        color: white !important;
+    }
+    
+    /* Status indicators */
+    .st-emotion-cache-pkbw8n {
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Channel row layout */
     .channel-row {
         display: flex;
         align-items: center;
-        padding: 5px 0;
+        padding: 8px 0;
     }
+    
+    /* Checkbox label colors */
     .stCheckbox > label {
         color: #dcddde !important;
     }
-    /* Make checkbox labels more visible */
+    
+    /* Checkbox labels more visible */
     .stCheckbox > label > p {
         color: #dcddde !important;
     }
-    /* Style the toggle switches to look like Discord's */
+    
+    /* Style toggle switches like Discord's */
     .stCheckbox > div[role="checkbox"] {
-        background-color: #36393f !important;
-        border-color: #72767d !important;
+        background-color: #4e5058 !important;
+        border-color: #4e5058 !important;
     }
+    
+    /* Active toggle switches */
     .stCheckbox > div[role="checkbox"][aria-checked="true"] {
         background-color: #5865F2 !important;
         border-color: #5865F2 !important;
+    }
+    
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #2b2d31 !important;
+        border-radius: 8px 8px 0 0 !important;
+        border-bottom: 2px solid #1e1f22 !important;
+    }
+    
+    /* Active tab */
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #5865F2 !important;
+        color: white !important;
+    }
+    
+    /* Server ID styling */
+    span.server-id {
+        color: #72767d;
+        font-size: 12px;
+        margin-left: 10px;
+    }
+    
+    /* Make saved message stand out */
+    .stSuccess {
+        background-color: #2b2d31 !important;
+        color: #43b581 !important;
+        border: 1px solid #43b581 !important;
+    }
+    
+    /* Bot avatar styling */
+    .bot-avatar {
+        background-color: #5865F2;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -279,15 +367,14 @@ else:
                 # Show bot info in a Discord-like container
                 status_indicator.success("Connected")
                 st.markdown(f"""
-                <div style='background-color: #36393f; padding: 10px; border-radius: 5px;'>
+                <div style='background-color: #2b2d31; padding: 12px; border-radius: 8px; border: 1px solid #1e1f22;'>
                     <div style='display: flex; align-items: center;'>
-                        <div style='background-color: #5865F2; width: 40px; height: 40px; border-radius: 50%; 
-                                margin-right: 10px; display: flex; justify-content: center; align-items: center; color: white;'>
+                        <div class='bot-avatar'>
                             {bot_name[0].upper()}
                         </div>
                         <div>
                             <p style='margin: 0; color: white;'><strong>{bot_name}</strong></p>
-                            <p style='margin: 0; color: #dcddde; font-size: 0.8em;'>ID: {bot_id}</p>
+                            <p style='margin: 0; color: #72767d; font-size: 0.8em;'>ID: {bot_id}</p>
                         </div>
                     </div>
                 </div>
@@ -295,7 +382,9 @@ else:
                 
                 # Get bot invitation URL
                 invitation_url = f"https://discord.com/oauth2/authorize?client_id={bot_id}&scope=bot&permissions=379904"
-                st.markdown(f"**Bot Invitation URL**: [Click to invite bot to your server]({invitation_url})")
+                st.markdown(f"""<div style='margin-top: 10px;'>
+                <strong>Bot Invitation URL</strong>: <a href='{invitation_url}' style='color: #5865F2;'>Click to invite bot to your server</a>
+                </div>""", unsafe_allow_html=True)
             else:
                 status_indicator.error("Disconnected")
                 st.markdown("**Error**: Could not connect to Discord API. Please check your token.")
@@ -429,7 +518,7 @@ else:
                             
                             permissions = st.session_state.permissions[server_id][channel_id]
                             
-                            # Display channel with checkboxes in Discord-like style
+                            # Discord-style channel with inline permission toggle
                             st.markdown(f"""
                             <div class="discord-channel">
                                 <span class="channel-icon">#</span>
@@ -437,7 +526,7 @@ else:
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Channel permission toggle - simplified to just "Active" (can reply in the channel)
+                            # Channel permission toggle with save button on same line
                             cols = st.columns([3, 1])
                             with cols[0]:
                                 active = st.checkbox("Bot Active in Channel", key=f"active_{server_id}_{channel_id}", 
@@ -480,7 +569,7 @@ else:
                                 
                                 permissions = st.session_state.permissions[server_id][channel_id]
                                 
-                                # Display channel with checkboxes
+                                # Discord-style channel with inline permission toggle
                                 st.markdown(f"""
                                 <div class="discord-channel">
                                     <span class="channel-icon">#</span>
@@ -488,7 +577,7 @@ else:
                                 </div>
                                 """, unsafe_allow_html=True)
                                 
-                                # Channel permission toggle - simplified to just "Active" (can reply in the channel)
+                                # Channel permission toggle with save button on same line
                                 cols = st.columns([3, 1])
                                 with cols[0]:
                                     active = st.checkbox("Bot Active in Channel", key=f"active_{server_id}_{channel_id}", 
