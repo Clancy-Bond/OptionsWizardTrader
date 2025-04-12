@@ -118,7 +118,12 @@ class OptionsBot(commands.Bot):
         # Parse the query
         parsed = self.nlp.parse_query(content)
         
-        # Check if we have the minimum required information
+        # For unusual activity requests, if no option type is provided, we'll default to checking both
+        if parsed['request_type'] == 'unusual' and parsed['ticker'] and not parsed['option_type']:
+            await self.handle_unusual_activity_for_both(message, parsed)
+            return
+        
+        # Check if we have the minimum required information for other requests
         if not parsed['ticker'] or not parsed['option_type']:
             await message.channel.send("❌ I need at least a ticker symbol and option type (call/put). Example: @OptionsWizard What's a good stop loss for AAPL 180 calls expiring next month?")
             return
@@ -210,6 +215,73 @@ class OptionsBot(commands.Bot):
                 embed.add_field(name="Notable Trades", value=large_trades, inline=False)
         else:
             embed.add_field(name="Result", value="No unusual options activity detected for this ticker/option type.", inline=False)
+            
+        await message.channel.send(embed=embed)
+        
+    async def handle_unusual_activity_for_both(self, message, parsed):
+        """Handle unusual options activity requests for both calls and puts"""
+        # Check calls
+        call_result = unusual_activity.detect_unusual_activity(
+            ticker=parsed['ticker'],
+            option_type='call'
+        )
+        
+        # Check puts
+        put_result = unusual_activity.detect_unusual_activity(
+            ticker=parsed['ticker'],
+            option_type='put'
+        )
+        
+        # Format response as Discord embed
+        embed = discord.Embed(
+            title=f"🐳 Unusual Options Activity: {parsed['ticker']} (CALLS & PUTS)",
+            color=discord.Color.purple()
+        )
+        
+        # Add call information
+        embed.add_field(name="📈 CALLS", value="Results for call options:", inline=False)
+        if call_result['unusual_activity_detected']:
+            embed.add_field(name="Activity Level", value=call_result['activity_level'], inline=True)
+            embed.add_field(name="Volume/OI Ratio", value=f"{call_result['volume_oi_ratio']:.2f}x normal", inline=True)
+            embed.add_field(name="Sentiment", value=call_result['sentiment'], inline=True)
+            
+            if 'large_trades' in call_result and call_result['large_trades']:
+                large_trades = "\n".join([f"- {trade}" for trade in call_result['large_trades']])
+                embed.add_field(name="Notable Call Trades", value=large_trades, inline=False)
+        else:
+            embed.add_field(name="Call Activity", value="No unusual call options activity detected.", inline=False)
+        
+        # Add put information
+        embed.add_field(name="📉 PUTS", value="Results for put options:", inline=False)
+        if put_result['unusual_activity_detected']:
+            embed.add_field(name="Activity Level", value=put_result['activity_level'], inline=True)
+            embed.add_field(name="Volume/OI Ratio", value=f"{put_result['volume_oi_ratio']:.2f}x normal", inline=True)
+            embed.add_field(name="Sentiment", value=put_result['sentiment'], inline=True)
+            
+            if 'large_trades' in put_result and put_result['large_trades']:
+                large_trades = "\n".join([f"- {trade}" for trade in put_result['large_trades']])
+                embed.add_field(name="Notable Put Trades", value=large_trades, inline=False)
+        else:
+            embed.add_field(name="Put Activity", value="No unusual put options activity detected.", inline=False)
+            
+        # Overall sentiment summary
+        if call_result['unusual_activity_detected'] or put_result['unusual_activity_detected']:
+            if call_result['unusual_activity_detected'] and not put_result['unusual_activity_detected']:
+                overall = "🔹 Bullish bias (unusual call activity only)"
+            elif not call_result['unusual_activity_detected'] and put_result['unusual_activity_detected']:
+                overall = "🔸 Bearish bias (unusual put activity only)"
+            else:
+                # Both have activity, compare volume/OI ratios
+                if call_result['volume_oi_ratio'] > put_result['volume_oi_ratio'] * 1.5:
+                    overall = "🔹 Bullish bias (higher call activity)"
+                elif put_result['volume_oi_ratio'] > call_result['volume_oi_ratio'] * 1.5:
+                    overall = "🔸 Bearish bias (higher put activity)"
+                else:
+                    overall = "◼️ Mixed sentiment (similar call and put activity)"
+                    
+            embed.add_field(name="Overall Market Sentiment", value=overall, inline=False)
+        else:
+            embed.add_field(name="Overall Market Sentiment", value="No significant unusual options activity detected", inline=False)
             
         await message.channel.send(embed=embed)
 
