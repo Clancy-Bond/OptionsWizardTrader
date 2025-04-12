@@ -1046,7 +1046,7 @@ def get_simplified_unusual_activity_summary(ticker):
                     summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring soon.\n\n"
+                    summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
@@ -1103,7 +1103,7 @@ def get_simplified_unusual_activity_summary(ticker):
                     summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring soon.\n\n"
+                    summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
