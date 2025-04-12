@@ -1299,8 +1299,114 @@ def get_simplified_unusual_activity_summary(ticker):
             except:
                 pass
                 
-            # Format a detailed response with available market data
-            response = [f"📊 {ticker} Market Data"]
+            # Try to get overall market data and options info for a better response
+            try:
+                # Try to get options chain for nearest expiry if available
+                overall_sentiment = "NEUTRAL"
+                call_put_ratio = 0
+                calls_volume = 0
+                puts_volume = 0
+                total_options_premium = 0
+                biggest_option = None
+                expiry_date = ""
+                
+                if expirations:
+                    expiry_date = expirations[0]
+                    options = stock.option_chain(expiry_date)
+                    
+                    # Get call and put volume
+                    calls_volume = int(options.calls['volume'].sum())
+                    puts_volume = int(options.puts['volume'].sum())
+                    
+                    # Calculate put/call ratio and determine sentiment
+                    if puts_volume > 0 and calls_volume > 0:
+                        call_put_ratio = calls_volume / puts_volume
+                        
+                        if call_put_ratio > 2:
+                            overall_sentiment = "BULLISH"
+                        elif call_put_ratio > 1.2:
+                            overall_sentiment = "MILDLY BULLISH"
+                        elif call_put_ratio < 0.5:
+                            overall_sentiment = "BEARISH"
+                        elif call_put_ratio < 0.8:
+                            overall_sentiment = "MILDLY BEARISH"
+                            
+                    # Get biggest premium option
+                    if not options.calls.empty:
+                        calls_premium = options.calls['volume'] * options.calls['lastPrice'] * 100
+                        max_call_idx = calls_premium.idxmax() if not calls_premium.empty else None
+                        if max_call_idx is not None:
+                            max_call = options.calls.iloc[max_call_idx]
+                            max_call_premium = calls_premium.iloc[max_call_idx]
+                            biggest_option = {
+                                'strike': max_call['strike'],
+                                'expiry': expiry_date,
+                                'premium': max_call_premium,
+                                'volume': int(max_call['volume']),
+                                'sentiment': 'bullish'
+                            }
+                    
+                    if not options.puts.empty:
+                        puts_premium = options.puts['volume'] * options.puts['lastPrice'] * 100
+                        max_put_idx = puts_premium.idxmax() if not puts_premium.empty else None
+                        if max_put_idx is not None:
+                            max_put = options.puts.iloc[max_put_idx]
+                            max_put_premium = puts_premium.iloc[max_put_idx]
+                            if biggest_option is None or max_put_premium > biggest_option['premium']:
+                                biggest_option = {
+                                    'strike': max_put['strike'],
+                                    'expiry': expiry_date,
+                                    'premium': max_put_premium,
+                                    'volume': int(max_put['volume']),
+                                    'sentiment': 'bearish'
+                                }
+                    
+                # Format the response in the style of the unusual options activity report
+                response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
+                
+                # If we have a significant options position to report
+                if biggest_option and biggest_option['premium'] > 100000:  # Only show if premium > $100k
+                    contract_type = "call" if biggest_option['sentiment'] == 'bullish' else "put"
+                    emoji = "🟢" if biggest_option['sentiment'] == 'bullish' else "🔴"
+                    premium_millions = biggest_option['premium'] / 1000000
+                    
+                    # Add first bullet point about biggest flow
+                    response += f"• I'm seeing {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
+                    response += f"${premium_millions:.1f} million {biggest_option['sentiment']} "
+                    response += f"bet with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
+                    response += f"(${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
+                
+                # Add institutional investors bullet if we have volume data
+                if calls_volume > 0 or puts_volume > 0:
+                    dominant_type = "call" if calls_volume > puts_volume else "put"
+                    ratio = max(calls_volume, puts_volume) / max(min(calls_volume, puts_volume), 1)
+                    response += f"• Institutional Investors are "
+                    
+                    if ratio > 1.5:
+                        response += f"heavily favoring {dominant_type} options with volume {ratio:.1f}x the "
+                        response += f"{'put' if dominant_type == 'call' else 'call'} open interest.\n\n"
+                    else:
+                        response += f"showing mixed positioning with a {ratio:.1f}:1 {dominant_type}/{'put' if dominant_type == 'call' else 'call'} ratio.\n\n"
+                
+                # Add overall flow analysis
+                if calls_volume > 0 or puts_volume > 0:
+                    bullish_pct = (calls_volume / (calls_volume + puts_volume)) * 100 if calls_volume + puts_volume > 0 else 50
+                    bearish_pct = 100 - bullish_pct
+                    response += f"Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
+                
+                # Add premium data notice at the bottom
+                if current_price and not (biggest_option and biggest_option['premium'] > 100000):
+                    response += "\n\nSome premium options data requires API plan upgrade."
+                    if current_price:
+                        response += f" Current price: ${current_price:.2f}"
+                
+                return response
+                
+            except Exception as options_error:
+                print(f"Error generating options activity summary: {str(options_error)}")
+            
+            # Fallback to basic response if the options analysis fails
+            response = f"🐳 {ticker} Market Data 🐳\n\n"
             
             if current_price:
                 price_change = ""
@@ -1310,52 +1416,19 @@ def get_simplified_unusual_activity_summary(ticker):
                     direction = "▲" if change >= 0 else "▼"
                     price_change = f" ({direction} {abs(change):.2f}, {abs(pct):.1f}%)"
                 
-                response.append(f"Current Price: ${current_price:.2f}{price_change}")
+                response += f"• Current Price: ${current_price:.2f}{price_change}\n"
                 
             if day_high and day_low:
-                response.append(f"Day Range: ${day_low:.2f} - ${day_high:.2f}")
+                response += f"• Trading Range: ${day_low:.2f} - ${day_high:.2f}\n"
                 
             if volume:
                 volume_formatted = f"{volume:,}"
-                response.append(f"Volume: {volume_formatted}")
-                
-            if expirations:
-                exp_list = ", ".join(expirations)
-                response.append(f"Upcoming Options Expirations: {exp_list}")
+                response += f"• Volume: {volume_formatted}\n"
             
-            # Add options recommendation
-            if current_price:
-                # For TSLA specifically, provide a more detailed analysis if possible
-                if ticker == "TSLA":
-                    try:
-                        # Try to get TSLA options chain for nearest expiry date
-                        if expirations:
-                            options = stock.option_chain(expirations[0])
-                            calls_volume = options.calls['volume'].sum()
-                            puts_volume = options.puts['volume'].sum()
-                            
-                            if calls_volume > 0 or puts_volume > 0:
-                                ratio = calls_volume / max(puts_volume, 1)
-                                if ratio > 1.5:
-                                    sentiment = "bullish (more call options being traded)"
-                                elif ratio < 0.67:
-                                    sentiment = "bearish (more put options being traded)"
-                                else:
-                                    sentiment = "neutral (balanced call/put trading)"
-                                    
-                                response.append(f"\nOptions Volume: {calls_volume:,} calls, {puts_volume:,} puts")
-                                response.append(f"Current options sentiment appears {sentiment}")
-                                return "\n".join(response)
-                    except:
-                        pass
+            response += "\nFor real-time options sentiment, consider checking volume patterns on your trading platform."
+            response += "\nSome premium data requires API plan upgrade. Using basic stock data."
             
-            # Generic response if we can't get detailed options data
-            response.append("\nFor real-time options sentiment, consider checking volume patterns on your trading platform.")
-            
-            # Alert about premium data
-            response.append("Some premium data requires API plan upgrade. Using basic stock data.")
-            
-            return "\n".join(response)
+            return response
             
         except Exception as e:
             print(f"Yahoo Finance fallback also failed: {str(e)}")
