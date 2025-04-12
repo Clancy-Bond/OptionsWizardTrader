@@ -1364,8 +1364,8 @@ def get_simplified_unusual_activity_summary(ticker):
                 # Format the response in the style of the unusual options activity report
                 response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
                 
-                # If we have a significant options position to report
-                if biggest_option and biggest_option['premium'] > 100000:  # Only show if premium > $100k
+                # If we have an options position to report - use a lower threshold since we have unlimited API calls
+                if biggest_option and biggest_option['premium'] > 50000:  # Show if premium > $50k
                     contract_type = "call" if biggest_option['sentiment'] == 'bullish' else "put"
                     emoji = "🟢" if biggest_option['sentiment'] == 'bullish' else "🔴"
                     premium_millions = biggest_option['premium'] / 1000000
@@ -1395,7 +1395,7 @@ def get_simplified_unusual_activity_summary(ticker):
                     response += f"**Overall flow:** {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
                 
                 # Add current price at the bottom if we have it but no detailed trade data
-                if current_price and not (biggest_option and biggest_option['premium'] > 100000):
+                if current_price and not (biggest_option and biggest_option['premium'] > 50000):
                     # Just show the current price without the API plan upgrade message
                     response += f"\n\nCurrent price: ${current_price:.2f}"
                 
