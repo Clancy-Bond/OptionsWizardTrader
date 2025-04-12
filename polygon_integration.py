@@ -24,8 +24,59 @@ def get_headers():
     Get authenticated headers for Polygon API requests
     """
     return {
-        'Authorization': f'Bearer {POLYGON_API_KEY}'
+        'Authorization': f'Bearer {POLYGON_API_KEY}',
+        'User-Agent': 'OptionsWizard/1.0'  # Add user agent to reduce chance of rate limiting
     }
+    
+import time
+# Global tracker for rate limiting
+_last_api_call = 0
+_min_call_interval = 0.2  # Minimum seconds between API calls
+
+def handle_rate_limit(retry_after=1):
+    """
+    Handle rate limiting from Polygon API by sleeping
+    
+    Args:
+        retry_after: Seconds to wait before retrying (default: 1 second)
+    """
+    print(f"Rate limited by Polygon API, waiting {retry_after} seconds...")
+    time.sleep(retry_after)
+    
+def throttled_api_call(url, headers=None):
+    """
+    Make an API call with built-in throttling to avoid rate limits
+    
+    Args:
+        url: The URL to call
+        headers: Optional headers dictionary
+        
+    Returns:
+        Response object from requests
+    """
+    global _last_api_call, _min_call_interval
+    
+    # Calculate time since last API call
+    now = time.time()
+    time_since_last_call = now - _last_api_call
+    
+    # If we've made a call too recently, sleep to avoid rate limiting
+    if time_since_last_call < _min_call_interval:
+        sleep_time = _min_call_interval - time_since_last_call
+        time.sleep(sleep_time)
+    
+    # Make the API call
+    response = requests.get(url, headers=headers)
+    
+    # Update last call time
+    _last_api_call = time.time()
+    
+    # Handle rate limiting
+    if response.status_code == 429:
+        handle_rate_limit(3)  # Wait 3 seconds
+        return throttled_api_call(url, headers)  # Retry the call
+        
+    return response
 
 def fetch_all_tickers():
     """
@@ -128,13 +179,36 @@ def is_valid_ticker(ticker):
     if ticker in valid_ticker_cache:
         return True
     
+    # Try loading from cache file if available
+    try:
+        if os.path.exists('polygon_tickers.json') and not valid_ticker_cache:
+            with open('polygon_tickers.json', 'r') as f:
+                cached_tickers = json.load(f)
+                valid_ticker_cache.update(cached_tickers)
+                if ticker in valid_ticker_cache:
+                    return True
+    except Exception as e:
+        print(f"Error loading cache: {str(e)}")
+    
     # Make API call to validate ticker
     try:
         endpoint = f"{BASE_URL}/v3/reference/tickers?ticker={ticker}"
         response = requests.get(endpoint, headers=get_headers())
         
+        if response.status_code == 429:  # Rate limited
+            handle_rate_limit(2)  # Wait 2 seconds
+            # Try again with backoff
+            response = requests.get(endpoint, headers=get_headers())
+        
         if response.status_code != 200:
             print(f"Error checking ticker {ticker}: {response.status_code}")
+            # Check our cache file one more time before failing
+            if os.path.exists('polygon_tickers.json'):
+                with open('polygon_tickers.json', 'r') as f:
+                    cached_tickers = json.load(f)
+                    if ticker in cached_tickers:
+                        valid_ticker_cache.add(ticker)
+                        return True
             return False
         
         data = response.json()
@@ -206,6 +280,11 @@ def get_current_price(ticker):
         endpoint = f"{BASE_URL}/v2/last/trade/{ticker}"
         response = requests.get(endpoint, headers=get_headers())
         
+        if response.status_code == 429:  # Rate limited
+            handle_rate_limit(2)  # Wait 2 seconds
+            # Try again with backoff
+            response = requests.get(endpoint, headers=get_headers())
+            
         if response.status_code != 200:
             print(f"Error fetching current price for {ticker}: {response.status_code}")
             return None
@@ -253,6 +332,11 @@ def get_option_chain(ticker, expiration_date=None):
         
         response = requests.get(endpoint, headers=get_headers())
         
+        if response.status_code == 429:  # Rate limited
+            handle_rate_limit(3)  # Wait 3 seconds
+            # Try again with backoff
+            response = requests.get(endpoint, headers=get_headers())
+            
         if response.status_code != 200:
             print(f"Error fetching option chain for {ticker}: {response.status_code}")
             return None
@@ -495,8 +579,8 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Create the summary
-    summary = f"📊 {ticker} Unusual Options Activity: {overall_sentiment.upper()} BIAS\n\n"
+    # Create the summary with whale emojis
+    summary = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment.upper()} BIAS 🐳\n\n"
     
     for i, item in enumerate(activity):
         contract = item.get('contract', '')
