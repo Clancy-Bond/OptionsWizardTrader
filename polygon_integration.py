@@ -1375,7 +1375,7 @@ def get_simplified_unusual_activity_summary(ticker):
                     # Add first bullet point about biggest flow
                     response += f"• I'm seeing {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
                     response += f"**${premium_millions:.1f} million {biggest_option['sentiment']}** "
-                    response += f"bet made on {biggest_option['transaction_date']} with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
+                    response += f"bet with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
                     response += f"(${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
                 
                 # Add institutional investors bullet if we have volume data
