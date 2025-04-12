@@ -40,18 +40,21 @@ def get_option_trade_data(option_symbol, min_size=5):
         
         # If there are trades available, get the most significant one
         if trades:
+            print(f"Found {len(trades)} trades for {option_symbol}")
             # Look for a significant trade (by size)
             significant_trade = None
             for trade in trades:
                 size = trade.get('size', 0)
                 if size >= min_size:
                     significant_trade = trade
+                    print(f"Found significant trade with size {size} for {option_symbol}")
                     break
                     
             # If no significant trade found, use the most recent one
             if not significant_trade:
                 significant_trade = trades[0]
-                
+                print(f"No significant trade found, using most recent one for {option_symbol}")
+            
             # Get timestamp (prefer participant_timestamp if available)
             timestamp = significant_trade.get('participant_timestamp') or significant_trade.get('sip_timestamp')
             
@@ -71,11 +74,13 @@ def get_option_trade_data(option_symbol, min_size=5):
                 'price': significant_trade.get('price'),
                 'size': significant_trade.get('size')
             }
-        
-        # For future-dated options or those without trade history,
-        # we return an empty dict which indicates the option exists
-        # but we don't have historical trades
-        return {}
+        else:
+            print(f"No trades found for {option_symbol}")
+            
+            # For future-dated options or those without trade history,
+            # we return an empty dict which indicates the option exists
+            # but we don't have historical trades
+            return {}
     
     except Exception as e:
         print(f"Error getting option trade data for {option_symbol}: {str(e)}")
