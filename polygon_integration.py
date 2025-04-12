@@ -1108,7 +1108,6 @@ def get_unusual_options_activity(ticker):
                     
                     # Get the actual transaction date if available
                     # We'll use our polygon_trades module to get the most significant trade
-                    from polygon_trades import get_option_trade_data
                     
                     trade_info = None
                     try:
