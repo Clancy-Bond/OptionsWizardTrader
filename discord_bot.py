@@ -40,6 +40,10 @@ class OptionsBotNLP:
         # Regex patterns for extracting information from queries
         # Specialized pattern for extracting tickers, improved to better handle context
         self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Z]{1,5})(?!\w+\b)\b'
+        
+        # Common words that should never be treated as tickers
+        self.excluded_words = ['WHAT', 'WILL', 'THE', 'FOR', 'ARE', 'OPTIONS', 'OPTION', 'CALLS', 'PUTS',
+                              'CALL', 'PUT', 'SHOW', 'GET', 'WHO', 'WHY', 'HOW', 'WHEN', 'UNUSUAL', 'ACTIVITY']
         self.strike_pattern = r'\$?(\d+(?:\.\d+)?)'
         self.expiry_pattern = r'(\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?)|(\d{1,2}[- ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[- ]\d{2,4})'
         self.option_type_pattern = r'\b(call|put)s?\b'
@@ -55,7 +59,22 @@ class OptionsBotNLP:
         
         # Extract ticker using findall to get all matches (same as UnusualOptionsNLP)
         ticker_matches = re.findall(self.ticker_pattern, query, re.IGNORECASE)
-        ticker = ticker_matches[0].upper() if ticker_matches else None
+        
+        # Filter out common words that shouldn't be treated as tickers
+        filtered_matches = [match.upper() for match in ticker_matches if match.upper() not in self.excluded_words]
+        
+        # If we have filtered matches, use the first one
+        if filtered_matches:
+            ticker = filtered_matches[0]
+        # If we have no filtered matches but querying for unusual activity, look for a valid ticker only
+        elif "unusual" in query.lower() or "activity" in query.lower():
+            # No valid ticker was found, but this is an unusual activity request
+            ticker = None  # Let the bot show a message asking for a ticker
+        # Otherwise fall back to the first match (legacy behavior)
+        elif ticker_matches:
+            ticker = ticker_matches[0].upper()
+        else:
+            ticker = None
         
         # Extract strike price
         strike_match = re.search(self.strike_pattern, query)
