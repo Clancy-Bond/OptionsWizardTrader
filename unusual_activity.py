@@ -3,7 +3,9 @@ import pandas as pd
 import numpy as np
 import random  # For generating demo data only
 import datetime
+import os
 from dateutil.parser import parse
+import polygon_integration as polygon
 
 def detect_unusual_activity(ticker, option_type):
     """
@@ -228,6 +230,17 @@ def get_simplified_unusual_activity_summary(ticker):
     Returns:
         A string with a conversational summary of unusual options activity
     """
+    # First try using Polygon.io API if available
+    if os.getenv('POLYGON_API_KEY'):
+        try:
+            polygon_summary = polygon.get_simplified_unusual_activity_summary(ticker)
+            if polygon_summary and len(polygon_summary) > 20:  # Check for a valid response
+                print(f"Using Polygon.io data for unusual activity summary for {ticker}")
+                return polygon_summary
+        except Exception as e:
+            print(f"Error with Polygon unusual activity summary: {str(e)}")
+    
+    # Fall back to Yahoo Finance implementation
     try:
         stock = yf.Ticker(ticker)
         ticker_data = stock.history(period="1d")
@@ -237,7 +250,7 @@ def get_simplified_unusual_activity_summary(ticker):
         unusual_activity = get_unusual_options_activity(ticker)
         
         if not unusual_activity:
-            return f"I'm not seeing any unusual options activity for {ticker} right now."
+            return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
         
         # Get stock info
         info = stock.info
@@ -257,86 +270,44 @@ def get_simplified_unusual_activity_summary(ticker):
         
         overall_sentiment = ""
         if bullish_amount > bearish_amount * 1.5:
-            overall_sentiment = "strongly bullish"
+            overall_sentiment = "BULLISH"
         elif bullish_amount > bearish_amount:
-            overall_sentiment = "mildly bullish"
+            overall_sentiment = "MILDLY BULLISH"
         elif bearish_amount > bullish_amount * 1.5:
-            overall_sentiment = "strongly bearish"
+            overall_sentiment = "BEARISH"
         elif bearish_amount > bullish_amount:
-            overall_sentiment = "mildly bearish"
+            overall_sentiment = "MILDLY BEARISH"
         else:
-            overall_sentiment = "neutral with mixed signals"
+            overall_sentiment = "NEUTRAL"
         
-        # Create a conversational response
-        response = f"📊 **{ticker} Unusual Options Activity** 📊\n\n"
+        # Create a response with whale emojis in title
+        response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
         
-        # Add creative elements based on sentiment
-        traders = ["institutional investors", "large traders", "market makers", "big money players", "option whales"]
-        bullish_phrases = ["betting on a rally", "expecting upside", "positioning for gains", "optimistic about growth"]
-        bearish_phrases = ["hedging downside risk", "betting on a decline", "expecting weakness", "positioning defensively"]
+        # Format details for each activity (limit to top 5)
+        for i, item in enumerate(all_activity[:5]):
+            contract = f"{ticker} {item['strike']} {item['expiry']} {'Call' if item['sentiment'] == 'bullish' else 'Put'}"
+            volume = item.get('volume', 0)
+            sentiment = item.get('sentiment', 'neutral')
+            
+            # Add emojis based on sentiment
+            emoji = "🟢" if "bullish" in sentiment else "🔴" if "bearish" in sentiment else "⚪"
+            
+            response += f"{emoji} {contract}:\n"
+            response += f"   {volume} contracts (${item['amount']:,.0f} premium)\n"
         
-        if biggest_bet:
-            # Format the date
-            expiry_date = parse(biggest_bet['expiry'])
-            date_str = expiry_date.strftime("%B %d")
-            
-            # Format the dollar amount
-            amount_millions = biggest_bet['amount'] / 1000000
-            
-            trader_type = random.choice(traders)
-            action_phrase = random.choice(bullish_phrases if biggest_bet['sentiment'] == 'bullish' else bearish_phrases)
-            
-            response += f"• I'm seeing {overall_sentiment} activity for {company_name}. "
-            
-            if amount_millions >= 1:
-                response += f"The largest flow is a **${amount_millions:.1f} million {biggest_bet['sentiment']}** bet "
-            else:
-                amount_thousands = biggest_bet['amount'] / 1000
-                response += f"The largest flow is a **${amount_thousands:.0f}K {biggest_bet['sentiment']}** bet "
-            
-            strike_vs_current = (biggest_bet['strike'] / current_price - 1) * 100
-            strike_description = ""
-            
-            if biggest_bet['sentiment'] == 'bullish':
-                if strike_vs_current > 10:
-                    strike_description = f"far out-of-the-money (${biggest_bet['strike']:.2f}, about {abs(strike_vs_current):.0f}% above current price)"
-                elif strike_vs_current > 0:
-                    strike_description = f"out-of-the-money (${biggest_bet['strike']:.2f})"
-                else:
-                    strike_description = f"in-the-money (${biggest_bet['strike']:.2f})"
-            else:  # bearish
-                if strike_vs_current < -10:
-                    strike_description = f"far out-of-the-money (${biggest_bet['strike']:.2f}, about {abs(strike_vs_current):.0f}% below current price)"
-                elif strike_vs_current < 0:
-                    strike_description = f"out-of-the-money (${biggest_bet['strike']:.2f})"
-                else:
-                    strike_description = f"in-the-money (${biggest_bet['strike']:.2f})"
-            
-            response += f"with {strike_description} options expiring on {date_str}.\n\n"
-            
-            # Add some color about what this might mean
-            response += f"• {trader_type.title()} are {action_phrase} "
-            
-            if biggest_bet['sentiment'] == 'bullish':
-                response += f"with call options volume {biggest_bet['volume_oi_ratio']:.1f}x the open interest.\n\n"
-            else:
-                response += f"with put options volume {biggest_bet['volume_oi_ratio']:.1f}x the open interest.\n\n"
-                
-            # Add overall flow summary
-            total_flow = bullish_amount + bearish_amount
-            bullish_percentage = (bullish_amount / total_flow) * 100 if total_flow > 0 else 0
-            bearish_percentage = (bearish_amount / total_flow) * 100 if total_flow > 0 else 0
-            
-            response += f"**Overall flow:** {bullish_percentage:.0f}% bullish / {bearish_percentage:.0f}% bearish"
-            
+        # Add explanation based on sentiment
+        if "BULLISH" in overall_sentiment:
+            response += "\nLarge traders are showing bullish sentiment with significant call buying."
+        elif "BEARISH" in overall_sentiment:
+            response += "\nLarge traders are showing bearish sentiment with significant put buying."
         else:
-            response += f"I don't see any significant unusual options activity for {company_name} right now."
+            response += "\nMixed sentiment with balanced call and put activity."
             
         return response
         
     except Exception as e:
         print(f"Error generating simplified unusual activity summary: {str(e)}")
-        return f"I couldn't analyze unusual options activity for {ticker} right now. There might be an issue with the data source."
+        return f"📊 Unable to analyze unusual options activity for {ticker} due to an error."
 
 def detect_unusual_options_flow(options_data):
     """

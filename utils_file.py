@@ -182,15 +182,32 @@ def parse_relative_date(date_text):
     
     return None
 
+import polygon_integration as polygon
+
 def fetch_all_tickers():
     """
     Fetch a comprehensive list of all stock tickers from major exchanges.
-    This function will use Yahoo Finance API to directly fetch tickers.
+    This function will use Polygon.io API to fetch tickers.
     
     Returns:
         A set of valid ticker symbols
     """
-    print("Fetching comprehensive ticker list...")
+    # Try to use Polygon API first (much more comprehensive)
+    try:
+        # Check if we have a Polygon API key
+        if os.getenv('POLYGON_API_KEY'):
+            print("Using Polygon.io API to fetch comprehensive ticker list...")
+            polygon_tickers = polygon.fetch_all_tickers()
+            if polygon_tickers and len(polygon_tickers) > 100:
+                print(f"Successfully fetched {len(polygon_tickers)} tickers from Polygon.io")
+                # Update our cache
+                VALIDATED_TICKERS.update(polygon_tickers)
+                return polygon_tickers
+    except Exception as e:
+        print(f"Error using Polygon API: {str(e)}")
+    
+    # Fall back to our original method if Polygon fails
+    print("Falling back to Yahoo Finance method for tickers...")
     all_tickers = set(COMMON_INDICES)  # Start with our predefined list
     
     try:
@@ -298,7 +315,7 @@ def fetch_all_tickers():
 def is_valid_ticker(ticker):
     """
     Check if a symbol is a valid stock ticker by checking against our cached list
-    or Yahoo Finance.
+    or using Polygon.io API with Yahoo Finance as backup.
     
     Args:
         ticker: The symbol to check
@@ -326,6 +343,18 @@ def is_valid_ticker(ticker):
     if ticker in COMMON_WORDS:
         return False
     
+    # Try Polygon.io API first if available
+    if os.getenv('POLYGON_API_KEY'):
+        try:
+            if polygon.is_valid_ticker(ticker):
+                # It's a valid ticker - add to cache
+                VALIDATED_TICKERS.add(ticker)
+                print(f"Polygon validated and cached ticker: {ticker}")
+                return True
+        except Exception as e:
+            print(f"Error with Polygon validation for {ticker}: {str(e)}")
+    
+    # Fall back to Yahoo Finance if Polygon fails or isn't available
     try:
         # Try a quick info lookup for a known field (faster than full info)
         # Just check if we can get price data
@@ -335,11 +364,11 @@ def is_valid_ticker(ticker):
         if not hist.empty:
             # It's a valid ticker - add to cache
             VALIDATED_TICKERS.add(ticker)
-            print(f"Validated and cached ticker: {ticker}")
+            print(f"Yahoo validated and cached ticker: {ticker}")
             return True
         return False
     except Exception as e:
-        print(f"Error validating ticker {ticker}: {str(e)}")
+        print(f"Error validating ticker {ticker} with Yahoo: {str(e)}")
         return False
 
 def load_permissions():
