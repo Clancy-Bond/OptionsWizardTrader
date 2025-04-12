@@ -313,7 +313,7 @@ class OptionsBot(commands.Bot):
             import re
             
             # Look for the percentage pattern in overall flow
-            flow_pattern = r"Overall flow:\\s*(\\d+)%\\s+bullish\\s*[/]\\s*(\\d+)%\\s+bearish"
+            flow_pattern = r"Overall flow:\s*(\d+)%\s+bullish\s*[/]\s*(\d+)%\s+bearish"
             flow_match = re.search(flow_pattern, response_text, re.IGNORECASE)
             
             if flow_match:
@@ -345,7 +345,6 @@ class OptionsBot(commands.Bot):
             embed = discord.Embed(
                 title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
                 color=embed_color
-            )
             
             # Process the description
             if has_whale_emoji:
@@ -410,17 +409,37 @@ class OptionsBot(commands.Bot):
             
         else:
             # Standard unusual activity response with sentiment
-            # Extract sentiment from the response text to set color
-            is_bullish = "bullish" in response_text.lower()
-            is_bearish = "bearish" in response_text.lower()
+            # Check for overall flow percentages to determine color
+            import re
             
-            # Set embed color based on sentiment
-            if is_bullish and not is_bearish:
-                embed_color = discord.Color.green()  # Green for bullish
-            elif is_bearish and not is_bullish:
-                embed_color = discord.Color.red()  # Red for bearish
+            # Look for the percentage pattern in overall flow
+            flow_pattern = r"Overall flow:\s*(\d+)%\s+bullish\s*[/]\s*(\d+)%\s+bearish"
+            flow_match = re.search(flow_pattern, response_text, re.IGNORECASE)
+            
+            if flow_match:
+                # Extract percentages
+                bullish_pct = int(flow_match.group(1))
+                bearish_pct = int(flow_match.group(2))
+                
+                # Set color based on which percentage is higher
+                if bullish_pct > bearish_pct:
+                    embed_color = discord.Color.green()  # Green for majority bullish
+                elif bearish_pct > bullish_pct:
+                    embed_color = discord.Color.red()  # Red for majority bearish
+                else:
+                    embed_color = discord.Color.light_gray()  # Grey for 50-50
             else:
-                embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
+                # Fallback to keyword detection if percentages not found
+                is_bullish = "bullish" in response_text.lower()
+                is_bearish = "bearish" in response_text.lower()
+                
+                # Set embed color based on sentiment keywords
+                if is_bullish and not is_bearish:
+                    embed_color = discord.Color.green()  # Green for bullish
+                elif is_bearish and not is_bullish:
+                    embed_color = discord.Color.red()  # Red for bearish
+                else:
+                    embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
             
             # Format response as Discord embed with whale emoji
             embed = discord.Embed(
