@@ -1361,90 +1361,72 @@ def get_simplified_unusual_activity_summary(ticker):
                                     'sentiment': 'bearish'
                                 }
                     
-                # Format the response in the style of the unusual options activity report exactly matching the screenshots
-                response = f"🐋 {ticker} Unusual Options Activity 🐋\n\n"
+                # Format the response in the style of the unusual options activity report
+                response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
                 
                 # If we have a significant options position to report
                 if biggest_option and biggest_option['premium'] > 100000:  # Only show if premium > $100k
                     contract_type = "call" if biggest_option['sentiment'] == 'bullish' else "put"
+                    emoji = "🟢" if biggest_option['sentiment'] == 'bullish' else "🔴"
                     premium_millions = biggest_option['premium'] / 1000000
                     
-                    # Use the exact format from the screenshots
-                    sentiment_word = "strongly " if biggest_option['premium'] > 50000000 else ""
-                    sentiment_word += biggest_option['sentiment']
-                    
                     # Add first bullet point about biggest flow
-                    response += f"• I'm seeing {sentiment_word} activity for {ticker}. The largest flow is a "
+                    response += f"• I'm seeing {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
                     response += f"${premium_millions:.1f} million {biggest_option['sentiment']} "
-                    
-                    # In-the-money or out-of-the-money
-                    money_position = "in-the-money" if (biggest_option['sentiment'] == 'bullish' and current_price > biggest_option['strike']) or (biggest_option['sentiment'] == 'bearish' and current_price < biggest_option['strike']) else "out-of-the-money"
-                    
-                    response += f"bet with {money_position} (${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
-                else:
-                    # Create a reasonable default based on call/put ratio
-                    if puts_volume > calls_volume:
-                        response += f"• I'm seeing bearish activity for {ticker}. "
-                        if current_price:
-                            response += f"Options activity suggests pressure below current price ${current_price:.2f}.\n\n"
-                        else:
-                            response += f"Put options volume is dominating today's trading.\n\n"
-                    else:
-                        response += f"• I'm seeing bullish activity for {ticker}. "
-                        if current_price:
-                            response += f"Options activity suggests upward momentum from current price ${current_price:.2f}.\n\n"
-                        else:
-                            response += f"Call options volume is dominating today's trading.\n\n"
+                    response += f"bet with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
+                    response += f"(${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
                 
                 # Add institutional investors bullet if we have volume data
                 if calls_volume > 0 or puts_volume > 0:
-                    ratio_str = f"{call_put_ratio:.1f}:1" if call_put_ratio >= 1 else f"1:{(1/call_put_ratio):.1f}"
+                    dominant_type = "call" if calls_volume > puts_volume else "put"
+                    ratio = max(calls_volume, puts_volume) / max(min(calls_volume, puts_volume), 1)
+                    response += f"• Institutional Investors are "
                     
-                    if call_put_ratio > 5:
-                        response += f"• Institutional Investors are positioning for gains with call options volume {ratio_str.split(':')[0]}x the open interest.\n\n"
-                    elif call_put_ratio < 0.2:
-                        response += f"• Institutional Investors are positioning for losses with put options volume {ratio_str.split(':')[1]}x the open interest.\n\n"
+                    if ratio > 1.5:
+                        response += f"heavily favoring {dominant_type} options with volume {ratio:.1f}x the "
+                        response += f"{'put' if dominant_type == 'call' else 'call'} open interest.\n\n"
                     else:
-                        response += f"• Institutional Investors are showing mixed positioning with a {ratio_str} call/put ratio.\n\n"
+                        response += f"showing mixed positioning with a {ratio:.1f}:1 {dominant_type}/{'put' if dominant_type == 'call' else 'call'} ratio.\n\n"
                 
-                # Add overall flow analysis - exact format from screenshots
+                # Add overall flow analysis
                 if calls_volume > 0 or puts_volume > 0:
-                    bullish_pct = int((calls_volume / (calls_volume + puts_volume)) * 100) if calls_volume + puts_volume > 0 else 50
+                    bullish_pct = (calls_volume / (calls_volume + puts_volume)) * 100 if calls_volume + puts_volume > 0 else 50
                     bearish_pct = 100 - bullish_pct
-                    response += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
+                    response += f"Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
+                
+                # Add premium data notice at the bottom
+                if current_price and not (biggest_option and biggest_option['premium'] > 100000):
+                    response += "\n\nSome premium options data requires API plan upgrade."
+                    if current_price:
+                        response += f" Current price: ${current_price:.2f}"
                 
                 return response
                 
             except Exception as options_error:
                 print(f"Error generating options activity summary: {str(options_error)}")
             
-            # Fallback to simplified unusual activity format even when we don't have detailed options data
-            response = f"🐋 {ticker} Unusual Options Activity 🐋\n\n"
-            
-            # Create a reasonably informative first bullet point
-            sentiment = "bullish" if (current_price and prev_close and current_price > prev_close) else "bearish"
-            response += f"• I'm seeing {sentiment} activity for {ticker}. "
+            # Fallback to basic response if the options analysis fails
+            response = f"🐳 {ticker} Market Data 🐳\n\n"
             
             if current_price:
                 price_change = ""
                 if prev_close:
                     change = current_price - prev_close
                     pct = (change / prev_close) * 100
-                    if abs(pct) > 2:  # If price change is significant
-                        response += f"The stock has moved {abs(pct):.1f}% {'up' if pct > 0 else 'down'} today, "
-                        response += f"suggesting {'upward' if pct > 0 else 'downward'} momentum.\n\n"
-                    else:
-                        response += f"Options activity suggests {'upward' if sentiment == 'bullish' else 'downward'} movement from ${current_price:.2f}.\n\n"
-                else:
-                    response += f"Current price is ${current_price:.2f}.\n\n"
-            else:
-                response += f"Based on recent trading patterns.\n\n"
+                    direction = "▲" if change >= 0 else "▼"
+                    price_change = f" ({direction} {abs(change):.2f}, {abs(pct):.1f}%)"
+                
+                response += f"• Current Price: ${current_price:.2f}{price_change}\n"
+                
+            if day_high and day_low:
+                response += f"• Trading Range: ${day_low:.2f} - ${day_high:.2f}\n"
+                
+            if volume:
+                volume_formatted = f"{volume:,}"
+                response += f"• Volume: {volume_formatted}\n"
             
-            # Add a reasonable institutional investors bullet point
-            response += "• Institutional Investors are showing mixed positioning with balanced options activity.\n\n"
-            
-            # Default to balanced sentiment without detailed data
-            response += "Overall flow: 50% bullish / 50% bearish"
+            response += "\nFor real-time options sentiment, consider checking volume patterns on your trading platform."
+            response += "\nSome premium data requires API plan upgrade. Using basic stock data."
             
             return response
             
@@ -1464,74 +1446,26 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Create the summary with whale emojis - exact format from screenshot
-    summary = f"🐋 {ticker} Unusual Options Activity 🐋\n\n"
+    # Create the summary with whale emojis
+    summary = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment.upper()} BIAS 🐳\n\n"
     
-    # Find the largest premium activity
-    largest_activity = max(activity, key=lambda x: x.get('premium', 0)) if activity else None
+    for i, item in enumerate(activity):
+        contract = item.get('contract', '')
+        volume = item.get('volume', 0)
+        premium = item.get('premium', 0)
+        sentiment = item.get('sentiment', 'neutral')
+        
+        emoji = "🟢" if sentiment == 'bullish' else "🔴" if sentiment == 'bearish' else "⚪"
+        
+        summary += f"{emoji} {contract}:\n"
+        summary += f"   {volume} contracts (${premium:,.0f} premium)\n"
     
-    if largest_activity:
-        # Format the first bullet point like in the screenshots
-        premium_millions = largest_activity.get('premium', 0) / 1000000
-        strike = largest_activity.get('strike', 0)
-        expiry = largest_activity.get('expiry', '')
-        sentiment = largest_activity.get('sentiment', 'neutral')
-        
-        # Determine in-the-money or out-of-the-money
-        ticker_data = None
-        current_price = 0
-        try:
-            import yfinance as yf
-            ticker_data = yf.Ticker(ticker)
-            hist = ticker_data.history(period="1d")
-            if not hist.empty:
-                current_price = hist['Close'].iloc[-1]
-        except:
-            pass
-            
-        money_position = ""
-        if current_price > 0 and strike > 0:
-            if (sentiment == 'bullish' and current_price > strike) or (sentiment == 'bearish' and current_price < strike):
-                money_position = "in-the-money"
-            else:
-                money_position = "out-of-the-money"
-                
-        # Format the first bullet exactly like screenshot
-        summary += f"• I'm seeing {sentiment} activity for {ticker}. The largest flow is a "
-        summary += f"${premium_millions:.1f} million {sentiment} bet with "
-        
-        if money_position:
-            summary += f"{money_position} (${strike}) options "
-        else:
-            summary += f"options "
-            
-        if expiry:
-            summary += f"expiring on {expiry}."
-        else:
-            summary += f"expiring soon."
-            
-        summary += "\n\n"
-        
-        # Add institutional investors bullet
-        bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
-        bearish_count = sum(1 for item in activity if item.get('sentiment') == 'bearish')
-        
-        if bullish_count > bearish_count * 2:
-            summary += f"• Institutional Investors are positioning for gains with call options volume {bullish_count/max(bearish_count, 1):.1f}x the open interest.\n\n"
-        elif bearish_count > bullish_count * 2:
-            summary += f"• Institutional Investors are positioning for losses with put options volume {bearish_count/max(bullish_count, 1):.1f}x the open interest.\n\n"
-        else:
-            ratio = bullish_count/max(bearish_count, 1) if bullish_count >= bearish_count else bearish_count/max(bullish_count, 1)
-            ratio_str = f"{ratio:.1f}:1" if bullish_count >= bearish_count else f"1:{ratio:.1f}"
-            summary += f"• Institutional Investors are showing mixed positioning with a {ratio_str} {'call/put' if bullish_count >= bearish_count else 'put/call'} ratio.\n\n"
-    
-        # Add overall flow
-        total = bullish_count + bearish_count
-        if total > 0:
-            bullish_pct = int((bullish_count / total) * 100)
-            bearish_pct = 100 - bullish_pct
-            summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
-        else:
-            summary += "Overall flow: 50% bullish / 50% bearish"
+    # Add overall analysis
+    if overall_sentiment == "bullish":
+        summary += "\nLarge traders are showing bullish sentiment with significant call buying."
+    elif overall_sentiment == "bearish":
+        summary += "\nLarge traders are showing bearish sentiment with significant put buying."
+    else:
+        summary += "\nMixed sentiment with balanced call and put activity."
     
     return summary
