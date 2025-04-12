@@ -1362,15 +1362,14 @@ def get_simplified_unusual_activity_summary(ticker):
                                 }
                     
                 # Format the response in the style of the unusual options activity report with colored border based on sentiment
-                border_color = ""
                 if "BULLISH" in overall_sentiment:
-                    border_color = "```diff\n+"  # Green border for bullish
+                    response = "```diff\n+"  # Green border for bullish
                 elif "BEARISH" in overall_sentiment:
-                    border_color = "```diff\n-"  # Red border for bearish
+                    response = "```diff\n-"  # Red border for bearish
                 else:
-                    border_color = "```\n"  # Gray/default border for neutral
+                    response = "```"  # Gray/default border for neutral
                 
-                response = f"{border_color}\n🐳 TSLA Unusual Options Activity 🐳\n"
+                response += f"\n🐳 {ticker} Unusual Options Activity 🐳\n"
                 
                 # If we have a significant options position to report
                 if biggest_option and biggest_option['premium'] > 100000:  # Only show if premium > $100k
@@ -1465,15 +1464,14 @@ def get_simplified_unusual_activity_summary(ticker):
     
     # Create the summary with whale emojis and colored border based on sentiment
     # Add Discord formatting for colored border
-    border_color = ""
     if overall_sentiment == "bullish":
-        border_color = "```diff\n+"  # Green border for bullish
+        summary = "```diff\n+"  # Green border for bullish
     elif overall_sentiment == "bearish":
-        border_color = "```diff\n-"  # Red border for bearish
+        summary = "```diff\n-"  # Red border for bearish
     else:
-        border_color = "```\n"  # Gray/default border for neutral
+        summary = "```"  # Gray/default border for neutral
     
-    summary = f"{border_color}\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
+    summary += f"\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
     
     for i, item in enumerate(activity):
         contract = item.get('contract', '')

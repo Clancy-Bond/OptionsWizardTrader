@@ -285,15 +285,14 @@ def get_simplified_unusual_activity_summary(ticker):
         
         # Create a response with whale emojis in title and colored border
         # Add Discord formatting for colored border
-        border_color = ""
         if "BULLISH" in overall_sentiment:
-            border_color = "```diff\n+"  # Green border for bullish
+            response = "```diff\n+"  # Green border for bullish
         elif "BEARISH" in overall_sentiment:
-            border_color = "```diff\n-"  # Red border for bearish
+            response = "```diff\n-"  # Red border for bearish
         else:
-            border_color = "```\n"  # Gray/default border for neutral
+            response = "```"  # Gray/default border for neutral
             
-        response = f"{border_color}\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
+        response += f"\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
         
         # Format details for each activity (limit to top 5)
         for i, item in enumerate(all_activity[:5]):
