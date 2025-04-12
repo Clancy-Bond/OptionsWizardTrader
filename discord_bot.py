@@ -345,9 +345,35 @@ class OptionsBot(commands.Bot):
                 
                 # Look for the percentage pattern in overall flow
                 # Updated pattern to better match the format "XX% bullish / YY% bearish"
-                flow_pattern = r"Overall flow:?\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
+                flow_pattern = r"\*\*Overall flow:\*\*\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
                 flow_match = re.search(flow_pattern, response_text, re.IGNORECASE)
                 print(f"Flow pattern check: '{response_text}' - Match: {flow_match is not None}")
+                
+                # Try alternate pattern if first one fails (without bold formatting)
+                if not flow_match:
+                    alt_pattern = r"Overall flow:?\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
+                    flow_match = re.search(alt_pattern, response_text, re.IGNORECASE)
+                    print(f"Alt pattern check: Match: {flow_match is not None}")
+                
+                # Brute force method if both regex patterns fail
+                if not flow_match:
+                    # Look for any occurrence of XX% bullish or XX% bearish
+                    bullish_pct_pattern = r"(\d+)%\s*bullish"
+                    bearish_pct_pattern = r"(\d+)%\s*bearish"
+                    
+                    bullish_match = re.search(bullish_pct_pattern, response_text, re.IGNORECASE)
+                    bearish_match = re.search(bearish_pct_pattern, response_text, re.IGNORECASE)
+                    
+                    if bullish_match and bearish_match:
+                        # Create a mock match object with groups
+                        class MockMatch:
+                            def __init__(self, bull_pct, bear_pct):
+                                self.groups_data = (bull_pct, bear_pct)
+                            def group(self, idx):
+                                return self.groups_data[idx-1] if idx > 0 else self.groups_data
+                                
+                        flow_match = MockMatch(bullish_match.group(1), bearish_match.group(1))
+                        print(f"Brute force method: Bullish: {bullish_match.group(1)}%, Bearish: {bearish_match.group(1)}%")
                 
                 if flow_match:
                     # Extract percentages
@@ -453,10 +479,36 @@ class OptionsBot(commands.Bot):
             import re
             
             # Look for the percentage pattern in overall flow
-            # Updated pattern to better match the format "XX% bullish / YY% bearish"
-            flow_pattern = r"Overall flow:?\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
+            # Updated pattern to better match the format "XX% bullish / YY% bearish" with bold formatting
+            flow_pattern = r"\*\*Overall flow:\*\*\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
             flow_match = re.search(flow_pattern, response_text, re.IGNORECASE)
             print(f"Flow pattern check (both): '{response_text}' - Match: {flow_match is not None}")
+            
+            # Try alternate pattern if first one fails (without bold formatting)
+            if not flow_match:
+                alt_pattern = r"Overall flow:?\s*(\d+)%\s*bullish\s*\/?\s*(\d+)%\s*bearish"
+                flow_match = re.search(alt_pattern, response_text, re.IGNORECASE)
+                print(f"Alt pattern check (both): Match: {flow_match is not None}")
+            
+            # Brute force method if both regex patterns fail
+            if not flow_match:
+                # Look for any occurrence of XX% bullish or XX% bearish
+                bullish_pct_pattern = r"(\d+)%\s*bullish"
+                bearish_pct_pattern = r"(\d+)%\s*bearish"
+                
+                bullish_match = re.search(bullish_pct_pattern, response_text, re.IGNORECASE)
+                bearish_match = re.search(bearish_pct_pattern, response_text, re.IGNORECASE)
+                
+                if bullish_match and bearish_match:
+                    # Create a mock match object with groups
+                    class MockMatch:
+                        def __init__(self, bull_pct, bear_pct):
+                            self.groups_data = (bull_pct, bear_pct)
+                        def group(self, idx):
+                            return self.groups_data[idx-1] if idx > 0 else self.groups_data
+                            
+                    flow_match = MockMatch(bullish_match.group(1), bearish_match.group(1))
+                    print(f"Brute force method (both): Bullish: {bullish_match.group(1)}%, Bearish: {bearish_match.group(1)}%")
             
             if flow_match:
                 # Extract percentages
