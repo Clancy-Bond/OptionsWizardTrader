@@ -4,27 +4,85 @@ import json
 import yfinance as yf
 from datetime import datetime, timedelta
 
-# List of common market indices that might be mistaken for tickers
-COMMON_INDICES = ['SPX', 'VIX', 'DJI', 'IXIC', 'RUT', 'NDX', 'SPY', 'QQQ', 'IWM', 'MSFT', 'AAPL', 'GOOGL', 'AMZN', 'TSLA']
+# List of common market indices and popular stocks to pre-validate
+COMMON_INDICES = [
+    # Major indices
+    'SPX', 'VIX', 'DJI', 'IXIC', 'RUT', 'NDX', 'FTSE', 'GDAXI', 'HSI', 'N225',
+    
+    # ETFs for indices
+    'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO', 'XLF', 'XLE', 'XLK', 'XLI', 'XLV', 'XLP',
+    'XLU', 'XLB', 'XLY', 'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'VXX', 'UVXY', 'SVXY',
+    
+    # Major tech stocks
+    'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'GOOG', 'META', 'TSLA', 'NVDA', 'NFLX', 'ADBE',
+    'INTC', 'CSCO', 'ORCL', 'IBM', 'CRM', 'AMD', 'AMAT', 'AVGO', 'QCOM', 'ACN',
+    
+    # Other major stocks
+    'JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'V', 'MA', 'PFE', 'JNJ', 'MRK', 'ABBV',
+    'WMT', 'TGT', 'HD', 'LOW', 'KO', 'PEP', 'MCD', 'SBUX', 'DIS', 'CMCSA', 'T', 'VZ',
+    'PG', 'CL', 'NKE', 'F', 'GM', 'GE', 'BA', 'CAT', 'MMM', 'XOM', 'CVX', 'COP'
+]
 
 # Cache of validated tickers for performance
 VALIDATED_TICKERS = set(COMMON_INDICES)
 
-# Common English words and query terms to exclude (extensive list)
+# Common English words and query terms to exclude (actually extensive list)
 COMMON_WORDS = [
+    # Basic query words
     'WHAT', 'WILL', 'THE', 'FOR', 'ARE', 'OPTIONS', 'OPTION', 'CALLS', 'PUTS',
     'CALL', 'PUT', 'SHOW', 'GET', 'WHO', 'WHY', 'HOW', 'WHEN', 'UNUSUAL', 'ACTIVITY',
-    'THIS', 'THAT', 'HERE', 'THERE', 'FROM', 'INTO', 'YOUR', 'WITH', 'MORE', 'LESS',
-    'SOME', 'MANY', 'MUCH', 'MOST', 'EACH', 'EVERY', 'BOTH', 'THAN', 'THEN', 'THEY',
-    'THEM', 'THEIR', 'OTHER', 'ANOTHER', 'WOULD', 'COULD', 'SHOULD', 'ABOUT', 'THESE',
-    'THOSE', 'WHICH', 'WHERE', 'WHEN', 'WHILE', 'AFTER', 'BEFORE', 'DURING', 'UNDER',
-    'OVER', 'ABOVE', 'BELOW', 'BETWEEN', 'AMONG', 'AGAINST', 'WITHOUT', 'WITHIN',
-    'THROUGH', 'THROUGHOUT', 'ACROSS', 'ALONG', 'AROUND', 'UPON', 'NEXT', 'LAST',
-    'FIRST', 'SECOND', 'THIRD', 'LIKE', 'WANT', 'HAVE', 'NEED', 'FIND', 'LOOK',
-    'MAKE', 'HELP', 'GIVE', 'TAKE', 'KNOW', 'COME', 'PRICE', 'VALUE', 'TARGET',
-    'WORTH', 'ESTIMATE', 'TICKER', 'STOCK', 'SYMBOL', 'DATA', 'INFO', 'CHECK',
-    'LIST', 'PLEASE', 'THANKS', 'FLOW', 'WHALE', 'VOLUME', 'TRADING', 'MARKET',
-    'GOOD', 'BAD', 'HIGH', 'LOW', 'BEST', 'WORST', 'JUST', 'VERY', 'ONLY'
+    
+    # Articles and prepositions
+    'THE', 'AN', 'AND', 'BUT', 'OR', 'SO', 'TO', 'FROM', 'AT', 'BY', 'IN', 'OF', 'ON', 'OUT',
+    'INTO', 'ONTO', 'UPON', 'WITHIN', 'WITHOUT', 'THROUGH', 'THROUGHOUT', 'ACROSS', 'ALONG',
+    'AROUND', 'OVER', 'UNDER', 'ABOVE', 'BELOW', 'BEFORE', 'AFTER', 'DURING', 'SINCE', 'UNTIL',
+    'BETWEEN', 'AMONG', 'AGAINST', 'BESIDE', 'BESIDES', 'OFF', 'ABOUT', 'BEYOND', 'NEAR',
+    'WITH', 'TOWARD', 'TOWARDS', 'DESPITE', 'PER', 'VERSUS', 'VIA', 'AMID', 'AMIDST',
+    
+    # Pronouns
+    'THIS', 'THAT', 'THESE', 'THOSE', 'THEY', 'THEM', 'THEIR', 'THEIRS', 'THEMSELVES',
+    'YOU', 'YOUR', 'YOURS', 'YOURSELF', 'YOURSELVES', 'HE', 'HIM', 'HIS', 'HIMSELF',
+    'SHE', 'HER', 'HERS', 'HERSELF', 'IT', 'ITS', 'ITSELF', 'WE', 'US', 'OUR', 'OURS',
+    'OURSELVES', 'WHO', 'WHOM', 'WHOSE', 'WHICH', 'WHAT', 'WHATEVER', 'WHICHEVER',
+    'WHOEVER', 'WHOMEVER', 'ANYONE', 'ANYTHING', 'ANYWHERE', 'SOMEONE', 'SOMETHING',
+    'SOMEWHERE', 'EVERYONE', 'EVERYTHING', 'EVERYWHERE', 'NOBODY', 'NOTHING', 'NOWHERE',
+    
+    # Verbs
+    'IS', 'ARE', 'AM', 'WAS', 'WERE', 'BE', 'BEEN', 'BEING', 'HAVE', 'HAS', 'HAD', 'HAVING',
+    'DO', 'DOES', 'DID', 'DOING', 'WILL', 'WOULD', 'SHALL', 'SHOULD', 'CAN', 'COULD', 'MAY',
+    'MIGHT', 'MUST', 'GOING', 'WANT', 'WANTS', 'WANTED', 'WANTING', 'NEED', 'NEEDS', 'NEEDED',
+    'MAKE', 'MAKES', 'MADE', 'MAKING', 'TAKE', 'TAKES', 'TOOK', 'TAKEN', 'TAKING', 'GIVE',
+    'GIVES', 'GAVE', 'GIVEN', 'GIVING', 'FIND', 'FINDS', 'FOUND', 'FINDING', 'THINK', 'THINKS',
+    'THOUGHT', 'THINKING', 'KNOW', 'KNOWS', 'KNEW', 'KNOWN', 'KNOWING', 'SEE', 'SEES', 'SAW',
+    'SEEN', 'SEEING', 'LOOK', 'LOOKS', 'LOOKED', 'LOOKING', 'COME', 'COMES', 'CAME', 'COMING',
+    'GET', 'GETS', 'GOT', 'GOTTEN', 'GETTING', 'HELP', 'HELPS', 'HELPED', 'HELPING',
+    
+    # Adjectives and adverbs
+    'GOOD', 'BETTER', 'BEST', 'BAD', 'WORSE', 'WORST', 'HIGH', 'HIGHER', 'HIGHEST', 'LOW',
+    'LOWER', 'LOWEST', 'BIG', 'BIGGER', 'BIGGEST', 'SMALL', 'SMALLER', 'SMALLEST', 'MANY',
+    'MORE', 'MOST', 'FEW', 'FEWER', 'FEWEST', 'MUCH', 'SOME', 'ANY', 'ALL', 'EACH', 'EVERY',
+    'SEVERAL', 'BOTH', 'EITHER', 'NEITHER', 'FAST', 'FASTER', 'FASTEST', 'SLOW', 'SLOWER',
+    'SLOWEST', 'EARLY', 'EARLIER', 'EARLIEST', 'LATE', 'LATER', 'LATEST', 'NOW', 'THEN',
+    'SOON', 'ALWAYS', 'NEVER', 'SOMETIMES', 'OFTEN', 'RARELY', 'USUALLY', 'VERY', 'QUITE',
+    'RATHER', 'SOMEWHAT', 'TOO', 'ENOUGH', 'JUST', 'ONLY', 'ALSO', 'ELSE', 'EVEN',
+    
+    # Trading and financial terms
+    'PRICE', 'VALUE', 'TARGET', 'WORTH', 'ESTIMATE', 'TICKER', 'STOCK', 'SYMBOL', 'DATA',
+    'INFO', 'CHECK', 'LIST', 'FLOW', 'WHALE', 'VOLUME', 'TRADING', 'MARKET', 'BUY', 'SELL',
+    'LONG', 'SHORT', 'HOLD', 'TRADE', 'TRADES', 'TRADING', 'POSITION', 'POSITIONS', 'PLAY',
+    'PLAYS', 'MOVE', 'MOVES', 'MOVING', 'UPSIDE', 'DOWNSIDE', 'BULL', 'BEAR', 'BULLISH',
+    'BEARISH', 'NEUTRAL', 'VOLATILITY', 'PREMIUM', 'DISCOUNT', 'RISK', 'REWARD', 'HEDGE',
+    'HEDGING', 'SPREAD', 'SPREADS', 'STRATEGY', 'STRATEGIES', 'CHART', 'CHARTS',
+    
+    # Quantities and dates
+    'FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH', 'LAST', 'NEXT', 'PREVIOUS', 'TODAY',
+    'TOMORROW', 'YESTERDAY', 'WEEK', 'MONTH', 'YEAR', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY',
+    'QUARTERLY', 'DAY', 'NIGHT', 'MORNING', 'EVENING', 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL',
+    'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER', 'MONDAY',
+    'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
+    
+    # Polite conversation words
+    'PLEASE', 'THANKS', 'THANK', 'SORRY', 'EXCUSE', 'HELLO', 'HI', 'BYE', 'GOODBYE', 'WELCOME'
 ]
 
 def format_ticker(ticker):

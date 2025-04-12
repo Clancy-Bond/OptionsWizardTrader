@@ -44,6 +44,7 @@ class OptionsBotNLP:
         
         # Using the extensive common words list imported from utils_file
         self.excluded_words = COMMON_WORDS
+        print(f"Loaded {len(COMMON_WORDS)} common words for ticker filtering")
         self.strike_pattern = r'\$?(\d+(?:\.\d+)?)'
         self.expiry_pattern = r'(\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?)|(\d{1,2}[- ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[- ]\d{2,4})'
         self.option_type_pattern = r'\b(call|put)s?\b'
