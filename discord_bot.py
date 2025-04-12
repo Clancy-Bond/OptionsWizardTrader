@@ -455,7 +455,8 @@ class OptionsBot(commands.Bot):
                 description = response_text
                 
             embed.description = description
-            embed.set_footer(text="Some premium data requires API plan upgrade. Using basic stock data.")
+            # Since we have unlimited API calls, no need for the upgrade message
+            embed.set_footer(text="Using available market data.")
             
         elif no_activity and not has_whale_emoji:
             # No unusual activity detected

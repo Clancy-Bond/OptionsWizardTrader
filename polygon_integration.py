@@ -1394,11 +1394,10 @@ def get_simplified_unusual_activity_summary(ticker):
                     bearish_pct = 100 - bullish_pct
                     response += f"**Overall flow:** {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
                 
-                # Add premium data notice at the bottom
+                # Add current price at the bottom if we have it but no detailed trade data
                 if current_price and not (biggest_option and biggest_option['premium'] > 100000):
-                    response += "\n\nSome premium options data requires API plan upgrade."
-                    if current_price:
-                        response += f" Current price: ${current_price:.2f}"
+                    # Just show the current price without the API plan upgrade message
+                    response += f"\n\nCurrent price: ${current_price:.2f}"
                 
                 return response
                 
@@ -1426,7 +1425,6 @@ def get_simplified_unusual_activity_summary(ticker):
                 response += f"• Volume: {volume_formatted}\n"
             
             response += "\nFor real-time options sentiment, consider checking volume patterns on your trading platform."
-            response += "\nSome premium data requires API plan upgrade. Using basic stock data."
             
             return response
             
