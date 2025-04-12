@@ -986,28 +986,25 @@ def get_simplified_unusual_activity_summary(ticker):
                     'premium_size': "large premium value"
                 }
                 
-                # Add unusualness score and key factors
+                # Previous code to add unusualness score has been removed as requested
                 unusual_factors = [factor_descriptions.get(k, k) for k, v in sorted_factors if v > 0]
-                if unusual_factors:
-                    unusual_factors_str = " and ".join(unusual_factors)
-                    summary += f"• Unusual activity score: {unusualness_score}/100 (based on {unusual_factors_str})\n"
+                
+                # Find specific trade information based on sentiment
+                if overall_sentiment == "bullish":
+                    main_trade = next((item for item in activity if item.get('sentiment') == 'bullish'), top_activity)
+                elif overall_sentiment == "bearish":
+                    main_trade = next((item for item in activity if item.get('sentiment') == 'bearish'), top_activity)
+                else:
+                    main_trade = top_activity
                     
-                    # Find specific trade information based on sentiment
-                    if overall_sentiment == "bullish":
-                        main_trade = next((item for item in activity if item.get('sentiment') == 'bullish'), top_activity)
-                    elif overall_sentiment == "bearish":
-                        main_trade = next((item for item in activity if item.get('sentiment') == 'bearish'), top_activity)
-                    else:
-                        main_trade = top_activity
-                        
-                    # Store the timestamp for use in the main trade description
-                    timestamp_str = ""
-                    if 'timestamp_human' in main_trade:
-                        timestamp_str = main_trade['timestamp_human']
-                    elif 'transaction_date' in main_trade:
-                        timestamp_str = main_trade['transaction_date']
-                        
-                    summary += "\n"
+                # Store the timestamp for use in the main trade description
+                timestamp_str = ""
+                if 'timestamp_human' in main_trade:
+                    timestamp_str = main_trade['timestamp_human']
+                elif 'transaction_date' in main_trade:
+                    timestamp_str = main_trade['transaction_date']
+                    
+                summary += "\n"
     
     # Add bullish or bearish summary statement
     if overall_sentiment == "bullish":

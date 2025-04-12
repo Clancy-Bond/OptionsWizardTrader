@@ -26,8 +26,8 @@ def format_timestamp(timestamp_ns):
         
     # Convert nanoseconds to seconds
     timestamp_sec = timestamp_ns / 1e9
-    # Use 12-hour format with AM/PM and add ET timezone
-    return datetime.fromtimestamp(timestamp_sec).strftime("%m/%d/%y %I:%M:%S %p ET")
+    # Only include the date as requested (MM/DD/YY)
+    return datetime.fromtimestamp(timestamp_sec).strftime("%m/%d/%y")
 
 def get_option_trade_data(option_symbol, min_size=5):
     """
