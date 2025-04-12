@@ -1361,8 +1361,16 @@ def get_simplified_unusual_activity_summary(ticker):
                                     'sentiment': 'bearish'
                                 }
                     
-                # Format the response in the style of the unusual options activity report
-                response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
+                # Format the response in the style of the unusual options activity report with colored border based on sentiment
+                border_color = ""
+                if "BULLISH" in overall_sentiment:
+                    border_color = "```diff\n+"  # Green border for bullish
+                elif "BEARISH" in overall_sentiment:
+                    border_color = "```diff\n-"  # Red border for bearish
+                else:
+                    border_color = "```\n"  # Gray/default border for neutral
+                
+                response = f"{border_color}\n🐳 TSLA Unusual Options Activity 🐳\n"
                 
                 # If we have a significant options position to report
                 if biggest_option and biggest_option['premium'] > 100000:  # Only show if premium > $100k
@@ -1370,9 +1378,9 @@ def get_simplified_unusual_activity_summary(ticker):
                     emoji = "🟢" if biggest_option['sentiment'] == 'bullish' else "🔴"
                     premium_millions = biggest_option['premium'] / 1000000
                     
-                    # Add first bullet point about biggest flow
-                    response += f"• I'm seeing {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
-                    response += f"${premium_millions:.1f} million {biggest_option['sentiment']} "
+                    # Add first bullet point about biggest flow with bold for the dollar amount
+                    response += f"• I'm seeing strongly {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
+                    response += f"**${premium_millions:.1f} million {biggest_option['sentiment']}** "  # Bold the dollar amount and sentiment
                     response += f"bet with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
                     response += f"(${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
                 
@@ -1388,11 +1396,11 @@ def get_simplified_unusual_activity_summary(ticker):
                     else:
                         response += f"showing mixed positioning with a {ratio:.1f}:1 {dominant_type}/{'put' if dominant_type == 'call' else 'call'} ratio.\n\n"
                 
-                # Add overall flow analysis
+                # Add overall flow analysis with bold formatting
                 if calls_volume > 0 or puts_volume > 0:
                     bullish_pct = (calls_volume / (calls_volume + puts_volume)) * 100 if calls_volume + puts_volume > 0 else 50
                     bearish_pct = 100 - bullish_pct
-                    response += f"Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
+                    response += f"**Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish**"
                 
                 # Add premium data notice at the bottom
                 if current_price and not (biggest_option and biggest_option['premium'] > 100000):
@@ -1446,8 +1454,17 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Create the summary with whale emojis
-    summary = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment.upper()} BIAS 🐳\n\n"
+    # Create the summary with whale emojis and colored border based on sentiment
+    # Add Discord formatting for colored border
+    border_color = ""
+    if overall_sentiment == "bullish":
+        border_color = "```diff\n+"  # Green border for bullish
+    elif overall_sentiment == "bearish":
+        border_color = "```diff\n-"  # Red border for bearish
+    else:
+        border_color = "```\n"  # Gray/default border for neutral
+    
+    summary = f"{border_color}\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
     
     for i, item in enumerate(activity):
         contract = item.get('contract', '')
