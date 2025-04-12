@@ -318,22 +318,34 @@ def save_permissions(permissions):
 
 
 # Discord token handling
-discord_token = os.getenv('DISCORD_TOKEN_2')
+discord_token = os.getenv('DISCORD_TOKEN') or os.getenv('DISCORD_TOKEN_2')
 
 if not discord_token:
-    st.error("Discord token not found. Please set the DISCORD_TOKEN_2 environment variable.")
+    st.error("Discord token not found. Please set the DISCORD_TOKEN environment variable.")
     st.info("You need to configure the Discord token in the .env file or in your Replit Secrets.")
+    
+    # Add an input field to directly add the token
+    st.markdown("### Add Your Discord Bot Token")
+    new_token = st.text_input("Bot Token", type="password", help="Enter your Discord bot token here")
+    
+    if st.button("Save Token"):
+        if new_token:
+            update_discord_token(new_token)
+            st.success("Token saved! Reloading page...")
+            st.rerun()
+        else:
+            st.warning("Please enter a valid token")
     
     # Add some instructions for admins
     st.markdown("""
     ### Admin Instructions
     
-    To configure the Discord token:
+    To get your Discord bot token:
     1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
     2. Select your application or create a new one
     3. Go to the "Bot" tab
     4. Click "Reset Token" or "Copy" if you already have one
-    5. Add the token to your environment variables as DISCORD_TOKEN_2
+    5. Paste the token in the field above and click "Save Token"
     """)
     
     # Exit early if no token
