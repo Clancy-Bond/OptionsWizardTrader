@@ -11,6 +11,23 @@ load_dotenv()
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
 BASE_URL = "https://api.polygon.io"
 
+def format_timestamp(timestamp_ns):
+    """
+    Format a nanosecond timestamp to a human-readable date and time
+    
+    Args:
+        timestamp_ns: Timestamp in nanoseconds
+        
+    Returns:
+        Formatted date and time string (MM/DD/YY HH:MM:SS)
+    """
+    if not timestamp_ns:
+        return None
+        
+    # Convert nanoseconds to seconds
+    timestamp_sec = timestamp_ns / 1e9
+    return datetime.fromtimestamp(timestamp_sec).strftime("%m/%d/%y %H:%M:%S")
+
 def get_option_trade_data(option_symbol, min_size=5):
     """
     Get the most recent significant trade for a specific option contract
@@ -20,7 +37,7 @@ def get_option_trade_data(option_symbol, min_size=5):
         min_size: Minimum trade size to consider significant
         
     Returns:
-        Dictionary with trade data including date, price, and size if available
+        Dictionary with trade data including date, price, size, and exchange if available
         Returns a dict with just price if the option exists but has no trade history
         Returns None if the option doesn't exist or there was an error
     """
@@ -55,24 +72,28 @@ def get_option_trade_data(option_symbol, min_size=5):
                 significant_trade = trades[0]
                 print(f"No significant trade found, using most recent one for {option_symbol}")
             
-            # Get timestamp (prefer participant_timestamp if available)
+            # Get timestamp (prefer participant_timestamp for more accurate timing when available)
             timestamp = significant_trade.get('participant_timestamp') or significant_trade.get('sip_timestamp')
+            exchange = significant_trade.get('exchange')
             
             if timestamp:
-                # Convert nanoseconds to seconds and then to datetime
-                trade_date = datetime.fromtimestamp(timestamp / 1e9)
-                date_str = trade_date.strftime("%m/%d/%y")
+                # Format timestamp for display and store exact time
+                date_str = format_timestamp(timestamp)
                 
                 return {
                     'date': date_str,
                     'price': significant_trade.get('price'),
-                    'size': significant_trade.get('size')
+                    'size': significant_trade.get('size'),
+                    'exchange': exchange,
+                    'timestamp': timestamp,  # Store raw timestamp for sorting/precision
+                    'timestamp_human': date_str  # Human readable version
                 }
             
             # If we have a trade but no timestamp (unlikely), just return price and size
             return {
                 'price': significant_trade.get('price'),
-                'size': significant_trade.get('size')
+                'size': significant_trade.get('size'),
+                'exchange': exchange
             }
         else:
             print(f"No trades found for {option_symbol}")
