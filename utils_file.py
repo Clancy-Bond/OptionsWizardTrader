@@ -1,7 +1,31 @@
 import re
 import os
 import json
+import yfinance as yf
 from datetime import datetime, timedelta
+
+# List of common market indices that might be mistaken for tickers
+COMMON_INDICES = ['SPX', 'VIX', 'DJI', 'IXIC', 'RUT', 'NDX', 'SPY', 'QQQ', 'IWM', 'MSFT', 'AAPL', 'GOOGL', 'AMZN', 'TSLA']
+
+# Cache of validated tickers for performance
+VALIDATED_TICKERS = set(COMMON_INDICES)
+
+# Common English words and query terms to exclude (extensive list)
+COMMON_WORDS = [
+    'WHAT', 'WILL', 'THE', 'FOR', 'ARE', 'OPTIONS', 'OPTION', 'CALLS', 'PUTS',
+    'CALL', 'PUT', 'SHOW', 'GET', 'WHO', 'WHY', 'HOW', 'WHEN', 'UNUSUAL', 'ACTIVITY',
+    'THIS', 'THAT', 'HERE', 'THERE', 'FROM', 'INTO', 'YOUR', 'WITH', 'MORE', 'LESS',
+    'SOME', 'MANY', 'MUCH', 'MOST', 'EACH', 'EVERY', 'BOTH', 'THAN', 'THEN', 'THEY',
+    'THEM', 'THEIR', 'OTHER', 'ANOTHER', 'WOULD', 'COULD', 'SHOULD', 'ABOUT', 'THESE',
+    'THOSE', 'WHICH', 'WHERE', 'WHEN', 'WHILE', 'AFTER', 'BEFORE', 'DURING', 'UNDER',
+    'OVER', 'ABOVE', 'BELOW', 'BETWEEN', 'AMONG', 'AGAINST', 'WITHOUT', 'WITHIN',
+    'THROUGH', 'THROUGHOUT', 'ACROSS', 'ALONG', 'AROUND', 'UPON', 'NEXT', 'LAST',
+    'FIRST', 'SECOND', 'THIRD', 'LIKE', 'WANT', 'HAVE', 'NEED', 'FIND', 'LOOK',
+    'MAKE', 'HELP', 'GIVE', 'TAKE', 'KNOW', 'COME', 'PRICE', 'VALUE', 'TARGET',
+    'WORTH', 'ESTIMATE', 'TICKER', 'STOCK', 'SYMBOL', 'DATA', 'INFO', 'CHECK',
+    'LIST', 'PLEASE', 'THANKS', 'FLOW', 'WHALE', 'VOLUME', 'TRADING', 'MARKET',
+    'GOOD', 'BAD', 'HIGH', 'LOW', 'BEST', 'WORST', 'JUST', 'VERY', 'ONLY'
+]
 
 def format_ticker(ticker):
     """
@@ -98,6 +122,52 @@ def parse_relative_date(date_text):
             return target_date.strftime('%Y-%m-%d')
     
     return None
+
+def is_valid_ticker(ticker):
+    """
+    Check if a symbol is a valid stock ticker by checking with Yahoo Finance.
+    
+    Args:
+        ticker: The symbol to check
+        
+    Returns:
+        Boolean indicating if it's a valid ticker
+    """
+    if not ticker or not isinstance(ticker, str):
+        return False
+        
+    # Convert to uppercase and remove any leading $ sign
+    ticker = ticker.upper()
+    if ticker.startswith('$'):
+        ticker = ticker[1:]
+    
+    # Basic format validation: 1-5 characters, all uppercase letters
+    if not re.match(r'^[A-Z]{1,5}$', ticker):
+        return False
+        
+    # Quick check in cache to avoid API calls
+    if ticker in VALIDATED_TICKERS:
+        return True
+    
+    # Quick check against common words
+    if ticker in COMMON_WORDS:
+        return False
+    
+    try:
+        # Try a quick info lookup for a known field (faster than full info)
+        # Just check if we can get price data
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="1d")
+        
+        if not hist.empty:
+            # It's a valid ticker - add to cache
+            VALIDATED_TICKERS.add(ticker)
+            print(f"Validated and cached ticker: {ticker}")
+            return True
+        return False
+    except Exception as e:
+        print(f"Error validating ticker {ticker}: {str(e)}")
+        return False
 
 def load_permissions():
     """

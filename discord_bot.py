@@ -12,6 +12,7 @@ import option_calculator
 import unusual_activity
 import combined_scalp_stop_loss
 import calculate_dynamic_theta_decay
+from utils_file import is_valid_ticker, COMMON_WORDS
 
 # Load environment variables
 load_dotenv()
@@ -39,11 +40,10 @@ class OptionsBotNLP:
     def __init__(self):
         # Regex patterns for extracting information from queries
         # Specialized pattern for extracting tickers, improved to better handle context
-        self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Z]{1,5})(?!\w+\b)\b'
+        self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Za-z]{1,5})(?!\w+\b)\b'
         
-        # Common words that should never be treated as tickers
-        self.excluded_words = ['WHAT', 'WILL', 'THE', 'FOR', 'ARE', 'OPTIONS', 'OPTION', 'CALLS', 'PUTS',
-                              'CALL', 'PUT', 'SHOW', 'GET', 'WHO', 'WHY', 'HOW', 'WHEN', 'UNUSUAL', 'ACTIVITY']
+        # Using the extensive common words list imported from utils_file
+        self.excluded_words = COMMON_WORDS
         self.strike_pattern = r'\$?(\d+(?:\.\d+)?)'
         self.expiry_pattern = r'(\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?)|(\d{1,2}[- ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[- ]\d{2,4})'
         self.option_type_pattern = r'\b(call|put)s?\b'
@@ -60,19 +60,34 @@ class OptionsBotNLP:
         # Extract ticker using findall to get all matches (same as UnusualOptionsNLP)
         ticker_matches = re.findall(self.ticker_pattern, query, re.IGNORECASE)
         
-        # Filter out common words that shouldn't be treated as tickers
-        filtered_matches = [match.upper() for match in ticker_matches if match.upper() not in self.excluded_words]
+        # Filter out non-tickers and common words
+        valid_tickers = []
+        for match in ticker_matches:
+            # Convert to uppercase for consistent comparison
+            match_upper = match.upper()
+            
+            # Skip common words
+            if match_upper in self.excluded_words:
+                continue
+                
+            # Check if it's a valid ticker with our validation function
+            if is_valid_ticker(match_upper):
+                valid_tickers.append(match_upper)
         
-        # If we have filtered matches, use the first one
-        if filtered_matches:
-            ticker = filtered_matches[0]
-        # If we have no filtered matches but querying for unusual activity, look for a valid ticker only
+        # If we found valid tickers, use the first one
+        if valid_tickers:
+            ticker = valid_tickers[0]
+        # If we have no valid tickers but querying for unusual activity
         elif "unusual" in query.lower() or "activity" in query.lower():
             # No valid ticker was found, but this is an unusual activity request
             ticker = None  # Let the bot show a message asking for a ticker
-        # Otherwise fall back to the first match (legacy behavior)
+        # Legacy fallback - first potential ticker that's not excluded
         elif ticker_matches:
-            ticker = ticker_matches[0].upper()
+            potential_ticker = ticker_matches[0].upper()
+            if potential_ticker not in self.excluded_words:
+                ticker = potential_ticker
+            else:
+                ticker = None
         else:
             ticker = None
         
