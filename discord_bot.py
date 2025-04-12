@@ -37,36 +37,82 @@ class OptionsBotNLP:
     """Natural language processor for options trading queries"""
     
     def __init__(self):
-        # Regex patterns for extracting information from queries
-        self.ticker_pattern = r'\b([A-Z]{1,5})\b'
-        self.strike_pattern = r'\$?(\d+(?:\.\d+)?)'
-        self.expiry_pattern = r'(\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?)|(\d{1,2}[- ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[- ]\d{2,4})'
+        # Common words to exclude from ticker detection
+        self.common_words = ['WHAT', 'WILL', 'THE', 'FOR', 'ARE', 'OPTIONS', 'OPTION', 'CALLS', 'PUTS', 
+                            'STRIKE', 'PRICE', 'BE', 'WORTH', 'HOW', 'MUCH', 'CAN', 'YOU', 'TELL', 'ME', 
+                            'ABOUT', 'PREDICT', 'CALCULATE', 'ESTIMATE', 'SHOW', 'GET', 'BUY', 'SELL', 
+                            'CALL', 'PUT', 'AND', 'WITH', 'ANALYZE', 'UNUSUAL', 'ACTIVITY', 'STOP', 'LOSS']
+        
+        # Enhanced regex patterns for extracting information from queries
+        self.ticker_pattern = r'(?:\bfor\s+)?(?:\bmy\s+)?([A-Z]{1,5})\b'
+        self.strike_pattern = r'(?:\$?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s?(?:strike|[$]))'
+        self.expiry_pattern = r'(?:(?:expir(?:ing|e|es|ation)?\s+(?:on|at|in)?\s+)?(\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2}(?:st|nd|rd|th)?\s+\d{4}|\w+\s+\d{1,2}(?:st|nd|rd|th)?|\d{1,2}(?:st|nd|rd|th)?\s+\w+\s+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+\w+))'
         self.option_type_pattern = r'\b(call|put)s?\b'
+        self.contract_count_pattern = r'(?:my)\s+(\d+)\s+(?:[a-zA-Z]+\s+)*(?:contracts?|positions?|options?)|(?:what\s+will\s+my)\s+(\d+)\s+(?:[a-zA-Z]+\s+)*(?:contracts?|positions?|options?)|(?:I\s+(?:have|own|bought|purchased)|with|for)\s+(\d+)\s+(?:[a-zA-Z]+\s+)*(?:contracts?|positions?|options?)|(\d+)\s+(?:contracts?|positions?|options?)'
+        self.price_target_pattern = r'(?:target|reach(?:es)?|go(?:es)? to|hits?|move(?:s)? to)\s+(?:price\s+(?:of\s+)?)?\$?(\d+\.?\d*)'
+        
+        # Enhanced request type patterns
         self.request_type_patterns = {
-            'price': r'\b(price|estimate|pricing|worth|value)\b',
-            'stop_loss': r'\b(stop[-\s]?loss|sl|stop)\b',
-            'unusual': r'\b(unusual|activity|flow|whale|institution)\b'
+            'price': r'\b(price|estimate|pricing|worth|value|calculate|cost|profit|show|options|option)\b',
+            'stop_loss': r'\b(stop[-\s]?loss|sl|stop|support|risk|exit)\b',
+            'unusual': r'\b(unusual|activity|flow|whale|volume|institution)\b'
         }
     
     def parse_query(self, query):
-        """Parse a natural language query for options trading parameters"""
+        """Parse a natural language query for options trading parameters with enhanced handling"""
+        original_query = query
         query = query.lower()
         
-        # Extract ticker
-        ticker_match = re.search(self.ticker_pattern, query, re.IGNORECASE)
-        ticker = ticker_match.group(1).upper() if ticker_match else None
+        # Extract ticker - enhanced to avoid common words and check prefixes
+        ticker_matches = re.findall(self.ticker_pattern, original_query)
+        ticker = None
+        for match in ticker_matches:
+            if match not in self.common_words:
+                ticker = match.upper()
+                break
+                
+        # If we couldn't find a ticker that way, try to find tickers after specific words
+        if not ticker:
+            # Look for tickers after common prepositions
+            for prefix in ['FOR', 'MY', 'WITH', 'ON', 'IN']:
+                ticker_after_word = re.search(f'{prefix}\\s+([A-Z]{{1,5}})\\b', original_query)
+                if ticker_after_word and ticker_after_word.group(1) not in self.common_words:
+                    ticker = ticker_after_word.group(1).upper()
+                    break
         
-        # Extract strike price
+        # Extract strike price with improved handling
         strike_match = re.search(self.strike_pattern, query)
-        strike = float(strike_match.group(1)) if strike_match else None
+        strike = None
+        if strike_match:
+            strike_str = strike_match.group(1) or strike_match.group(2)
+            # Clean up dollar signs if present
+            if strike_str and "$" in strike_str:
+                strike_str = strike_str.replace("$", "")
+            strike = float(strike_str) if strike_str else None
         
-        # Extract expiration date
+        # Extract expiration date with improved date format handling
         expiry_match = re.search(self.expiry_pattern, query)
         expiry = expiry_match.group(0) if expiry_match else None
         
         # Extract option type (call/put)
         option_type_match = re.search(self.option_type_pattern, query)
         option_type = option_type_match.group(1) if option_type_match else None
+        
+        # Extract number of contracts
+        contract_match = re.search(self.contract_count_pattern, query)
+        contract_count = None
+        if contract_match:
+            # Use the first non-None group from the contract count pattern
+            for group in contract_match.groups():
+                if group:
+                    contract_count = int(group)
+                    break
+        
+        # Extract target price
+        target_match = re.search(self.price_target_pattern, query)
+        target_price = None
+        if target_match:
+            target_price = float(target_match.group(1))
         
         # Determine request type
         request_type = None
@@ -84,7 +130,9 @@ class OptionsBotNLP:
             'strike': strike,
             'expiry': expiry,
             'option_type': option_type,
-            'request_type': request_type
+            'request_type': request_type,
+            'contract_count': contract_count,
+            'target_price': target_price
         }
 
 class OptionsBot(commands.Bot):
@@ -208,13 +256,37 @@ class OptionsBot(commands.Bot):
         # Get the simplified unusual activity summary
         response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
         
-        # Format response as Discord embed
+        # Extract sentiment from the response text to set color
+        is_bullish = "bullish" in response_text.lower()
+        is_bearish = "bearish" in response_text.lower()
+        is_neutral = "neutral" in response_text.lower()
+        
+        # Set embed color based on sentiment
+        if is_bullish and not is_bearish:
+            embed_color = discord.Color.green()  # Green for bullish
+        elif is_bearish and not is_bullish:
+            embed_color = discord.Color.red()  # Red for bearish
+        else:
+            embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
+        
+        # Format response as Discord embed with whale emoji
         embed = discord.Embed(
-            color=discord.Color.purple()
+            title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
+            color=embed_color
         )
         
-        # Use the formatted text directly from the summary
-        embed.description = response_text
+        # Use the formatted text directly from the summary (but skip the header since it's in the title)
+        if "📊" in response_text:
+            # Remove the header line (assumes header ends with first double newline)
+            header_end = response_text.find("\n\n")
+            if header_end != -1:
+                description = response_text[header_end+2:]
+            else:
+                description = response_text
+        else:
+            description = response_text
+            
+        embed.description = description
             
         await message.channel.send(embed=embed)
         
@@ -223,13 +295,37 @@ class OptionsBot(commands.Bot):
         # Get the simplified unusual activity summary - the same function works for "both"
         response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
         
-        # Format response as Discord embed
+        # Extract sentiment from the response text to set color
+        is_bullish = "bullish" in response_text.lower()
+        is_bearish = "bearish" in response_text.lower()
+        is_neutral = "neutral" in response_text.lower()
+        
+        # Set embed color based on sentiment
+        if is_bullish and not is_bearish:
+            embed_color = discord.Color.green()  # Green for bullish
+        elif is_bearish and not is_bullish:
+            embed_color = discord.Color.red()  # Red for bearish
+        else:
+            embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
+        
+        # Format response as Discord embed with whale emoji
         embed = discord.Embed(
-            color=discord.Color.purple()
+            title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
+            color=embed_color
         )
         
-        # Use the formatted text directly from the summary
-        embed.description = response_text
+        # Use the formatted text directly from the summary (but skip the header since it's in the title)
+        if "📊" in response_text:
+            # Remove the header line (assumes header ends with first double newline)
+            header_end = response_text.find("\n\n")
+            if header_end != -1:
+                description = response_text[header_end+2:]
+            else:
+                description = response_text
+        else:
+            description = response_text
+            
+        embed.description = description
             
         await message.channel.send(embed=embed)
 
