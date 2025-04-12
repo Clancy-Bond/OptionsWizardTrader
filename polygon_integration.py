@@ -804,14 +804,44 @@ def get_simplified_unusual_activity_summary(ticker):
     # Add bullish or bearish summary statement
     if overall_sentiment == "bullish":
         summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
-        main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
-        summary += f"bet with {main_contract.get('contract', '').split()[1]}-the-money (${main_contract.get('contract', '').split()[0]}) options expiring on {main_contract.get('contract', '').split()[1]}.\n\n"
-        summary += f"• Institutional Investors are heavily favoring call options with volume {round(bullish_count/bearish_count, 1)}x the put\nopen interest.\n\n"
+        
+        # Safely get the main contract
+        try:
+            main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
+            contract_parts = main_contract.get('contract', '').split()
+            if len(contract_parts) >= 2:
+                summary += f"bet with {contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {contract_parts[1]}.\n\n"
+            else:
+                summary += f"bet with options from the largest unusual activity.\n\n"
+        except (IndexError, AttributeError):
+            summary += f"bet with options from the largest unusual activity.\n\n"
+        
+        # Safely calculate the ratio
+        if bearish_count > 0:
+            summary += f"• Institutional Investors are heavily favoring call options with volume {round(bullish_count/bearish_count, 1)}x the put\nopen interest.\n\n"
+        else:
+            summary += f"• Institutional Investors are heavily favoring call options with dominant call volume.\n\n"
+            
     elif overall_sentiment == "bearish":
         summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
-        main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
-        summary += f"bet with {main_contract.get('contract', '').split()[1]}-the-money (${main_contract.get('contract', '').split()[0]}) options expiring on {main_contract.get('contract', '').split()[1]}.\n\n"
-        summary += f"• Institutional Investors are heavily favoring put options with volume {round(bearish_count/bullish_count, 1)}x the call\nopen interest.\n\n"
+        
+        # Safely get the main contract
+        try:
+            main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
+            contract_parts = main_contract.get('contract', '').split()
+            if len(contract_parts) >= 2:
+                summary += f"bet with {contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {contract_parts[1]}.\n\n"
+            else:
+                summary += f"bet with options from the largest unusual activity.\n\n"
+        except (IndexError, AttributeError):
+            summary += f"bet with options from the largest unusual activity.\n\n"
+        
+        # Safely calculate the ratio
+        if bullish_count > 0:
+            summary += f"• Institutional Investors are heavily favoring put options with volume {round(bearish_count/bullish_count, 1)}x the call\nopen interest.\n\n"
+        else:
+            summary += f"• Institutional Investors are heavily favoring put options with dominant put volume.\n\n"
+            
     else:
         summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
     
