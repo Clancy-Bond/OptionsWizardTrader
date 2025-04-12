@@ -23,8 +23,9 @@ def get_headers():
     """
     Get authenticated headers for Polygon API requests
     """
+    # Polygon.io doesn't use Bearer token in v2 and v3 REST API
+    # It uses the API key as a query parameter
     return {
-        'Authorization': f'Bearer {POLYGON_API_KEY}',
         'User-Agent': 'OptionsWizard/1.0'  # Add user agent to reduce chance of rate limiting
     }
     
@@ -93,7 +94,7 @@ def fetch_all_tickers():
         # Endpoint for ticker types
         types = ['CS', 'ETF']  # Common Stock and ETFs
         for ticker_type in types:
-            endpoint = f"{BASE_URL}/v3/reference/tickers?type={ticker_type}&active=true&limit=1000"
+            endpoint = f"{BASE_URL}/v3/reference/tickers?type={ticker_type}&active=true&limit=1000&apiKey={POLYGON_API_KEY}"
             
             # Make initial request with throttling
             response = throttled_api_call(endpoint, headers=get_headers())
@@ -193,7 +194,7 @@ def is_valid_ticker(ticker):
     
     # Make API call to validate ticker
     try:
-        endpoint = f"{BASE_URL}/v3/reference/tickers?ticker={ticker}"
+        endpoint = f"{BASE_URL}/v3/reference/tickers?ticker={ticker}&apiKey={POLYGON_API_KEY}"
         response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
@@ -237,7 +238,7 @@ def get_ticker_details(ticker):
     ticker = ticker.upper()
     
     try:
-        endpoint = f"{BASE_URL}/v3/reference/tickers/{ticker}"
+        endpoint = f"{BASE_URL}/v3/reference/tickers/{ticker}?apiKey={POLYGON_API_KEY}"
         response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
@@ -273,7 +274,7 @@ def get_current_price(ticker):
     
     try:
         # Get latest trade
-        endpoint = f"{BASE_URL}/v2/last/trade/{ticker}"
+        endpoint = f"{BASE_URL}/v2/last/trade/{ticker}?apiKey={POLYGON_API_KEY}"
         response = throttled_api_call(endpoint, headers=get_headers())
             
         if response.status_code != 200:
@@ -317,9 +318,9 @@ def get_option_chain(ticker, expiration_date=None):
     try:
         # Build the API endpoint
         if expiration_date:
-            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&expiration_date={expiration_date}"
+            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&expiration_date={expiration_date}&apiKey={POLYGON_API_KEY}"
         else:
-            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}"
+            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&apiKey={POLYGON_API_KEY}"
         
         # Use throttled API call
         response = throttled_api_call(endpoint, headers=get_headers())
