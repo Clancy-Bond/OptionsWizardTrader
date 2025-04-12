@@ -38,7 +38,7 @@ class OptionsBotNLP:
     
     def __init__(self):
         # Regex patterns for extracting information from queries
-        self.ticker_pattern = r'\b([A-Z]{1,5})\b'
+        self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Z]{1,5})(?!\w+\b)\b'
         self.strike_pattern = r'\$?(\d+(?:\.\d+)?)'
         self.expiry_pattern = r'(\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?)|(\d{1,2}[- ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[- ]\d{2,4})'
         self.option_type_pattern = r'\b(call|put)s?\b'
@@ -50,46 +50,65 @@ class OptionsBotNLP:
     
     def parse_query(self, query):
         """Parse a natural language query for options trading parameters"""
-        query = query.lower()
-        
-        # Extract ticker
-        ticker_match = re.search(self.ticker_pattern, query, re.IGNORECASE)
-        ticker = ticker_match.group(1).upper() if ticker_match else None
-        
-        # Extract strike price
-        strike_match = re.search(self.strike_pattern, query)
-        strike = float(strike_match.group(1)) if strike_match else None
-        
-        # Extract expiration date
-        expiry_match = re.search(self.expiry_pattern, query)
-        expiry = expiry_match.group(0) if expiry_match else None
-        
-        # Extract option type (call/put)
-        option_type_match = re.search(self.option_type_pattern, query)
-        option_type = option_type_match.group(1) if option_type_match else None
-        
-        # Determine request type
-        request_type = None
-        for req_type, pattern in self.request_type_patterns.items():
-            if re.search(pattern, query, re.IGNORECASE):
-                request_type = req_type
-                break
-        
-        # Special handling for unusual options activity
-        if "unusual" in query.lower() or "activity" in query.lower() or "flow" in query.lower():
-            request_type = 'unusual'
-        
-        # Default to price estimate if no request type detected
-        if not request_type:
-            request_type = 'price'
-        
-        return {
-            'ticker': ticker,
-            'strike': strike,
-            'expiry': expiry,
-            'option_type': option_type,
-            'request_type': request_type
-        }
+        try:
+            # Initialize result with default values
+            result = {
+                'ticker': None,
+                'strike': None,
+                'expiry': None,
+                'option_type': None,
+                'request_type': None
+            }
+            
+            # Make a copy of the original query for case-sensitive ticker extraction
+            original_query = query
+            query = query.lower()
+            
+            # Extract ticker symbol using the enhanced pattern
+            ticker_matches = re.findall(self.ticker_pattern, original_query, re.IGNORECASE)
+            if ticker_matches:
+                result['ticker'] = ticker_matches[0]
+            
+            # Extract strike price
+            strike_match = re.search(self.strike_pattern, query)
+            if strike_match:
+                result['strike'] = float(strike_match.group(1))
+            
+            # Extract expiration date
+            expiry_match = re.search(self.expiry_pattern, query)
+            if expiry_match:
+                result['expiry'] = expiry_match.group(0)
+            
+            # Extract option type (call/put)
+            option_type_match = re.search(self.option_type_pattern, query)
+            if option_type_match:
+                result['option_type'] = option_type_match.group(1)
+            
+            # Determine request type
+            for req_type, pattern in self.request_type_patterns.items():
+                if re.search(pattern, query, re.IGNORECASE):
+                    result['request_type'] = req_type
+                    break
+            
+            # Special handling for unusual options activity
+            if "unusual" in query or "activity" in query or "flow" in query or "whale" in query:
+                result['request_type'] = 'unusual'
+            
+            # Default to price estimate if no request type detected
+            if not result['request_type']:
+                result['request_type'] = 'price'
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error parsing query: {str(e)}")
+            return {
+                'ticker': None,
+                'strike': None,
+                'expiry': None,
+                'option_type': None,
+                'request_type': 'unknown'
+            }
 
 class OptionsBot(commands.Bot):
     """Discord bot for options trading analysis"""
