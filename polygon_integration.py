@@ -95,8 +95,8 @@ def fetch_all_tickers():
         for ticker_type in types:
             endpoint = f"{BASE_URL}/v3/reference/tickers?type={ticker_type}&active=true&limit=1000"
             
-            # Make initial request
-            response = requests.get(endpoint, headers=get_headers())
+            # Make initial request with throttling
+            response = throttled_api_call(endpoint, headers=get_headers())
             if response.status_code != 200:
                 print(f"Error fetching tickers: {response.status_code} - {response.text}")
                 continue
@@ -116,7 +116,8 @@ def fetch_all_tickers():
             
             while next_url and page_count < 5:  # Limit to 5 pages to avoid excessive API usage
                 full_url = f"{next_url}&apiKey={POLYGON_API_KEY}"
-                response = requests.get(full_url)
+                # Use throttled API call for pagination too
+                response = throttled_api_call(full_url)
                 
                 if response.status_code != 200:
                     print(f"Error fetching page {page_count+1}: {response.status_code}")
@@ -193,12 +194,7 @@ def is_valid_ticker(ticker):
     # Make API call to validate ticker
     try:
         endpoint = f"{BASE_URL}/v3/reference/tickers?ticker={ticker}"
-        response = requests.get(endpoint, headers=get_headers())
-        
-        if response.status_code == 429:  # Rate limited
-            handle_rate_limit(2)  # Wait 2 seconds
-            # Try again with backoff
-            response = requests.get(endpoint, headers=get_headers())
+        response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
             print(f"Error checking ticker {ticker}: {response.status_code}")
@@ -242,7 +238,7 @@ def get_ticker_details(ticker):
     
     try:
         endpoint = f"{BASE_URL}/v3/reference/tickers/{ticker}"
-        response = requests.get(endpoint, headers=get_headers())
+        response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
             print(f"Error fetching ticker details for {ticker}: {response.status_code}")
@@ -278,12 +274,7 @@ def get_current_price(ticker):
     try:
         # Get latest trade
         endpoint = f"{BASE_URL}/v2/last/trade/{ticker}"
-        response = requests.get(endpoint, headers=get_headers())
-        
-        if response.status_code == 429:  # Rate limited
-            handle_rate_limit(2)  # Wait 2 seconds
-            # Try again with backoff
-            response = requests.get(endpoint, headers=get_headers())
+        response = throttled_api_call(endpoint, headers=get_headers())
             
         if response.status_code != 200:
             print(f"Error fetching current price for {ticker}: {response.status_code}")
@@ -330,12 +321,8 @@ def get_option_chain(ticker, expiration_date=None):
         else:
             endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}"
         
-        response = requests.get(endpoint, headers=get_headers())
-        
-        if response.status_code == 429:  # Rate limited
-            handle_rate_limit(3)  # Wait 3 seconds
-            # Try again with backoff
-            response = requests.get(endpoint, headers=get_headers())
+        # Use throttled API call
+        response = throttled_api_call(endpoint, headers=get_headers())
             
         if response.status_code != 200:
             print(f"Error fetching option chain for {ticker}: {response.status_code}")
@@ -371,7 +358,7 @@ def get_option_expirations(ticker):
     
     try:
         endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&limit=1000"
-        response = requests.get(endpoint, headers=get_headers())
+        response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
             print(f"Error fetching option expirations for {ticker}: {response.status_code}")
@@ -435,7 +422,7 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
         # Now get the latest price for this option
         endpoint = f"{BASE_URL}/v2/last/trade/{option_symbol}"
-        response = requests.get(endpoint, headers=get_headers())
+        response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
             print(f"Error fetching option price: {response.status_code}")
@@ -504,7 +491,7 @@ def get_unusual_options_activity(ticker):
                 
             # Get trades for this option
             endpoint = f"{BASE_URL}/v3/trades/{option_symbol}?limit=50&order=desc"
-            response = requests.get(endpoint, headers=get_headers())
+            response = throttled_api_call(endpoint, headers=get_headers())
             
             if response.status_code != 200:
                 continue
