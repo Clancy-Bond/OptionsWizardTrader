@@ -872,9 +872,22 @@ def get_unusual_options_activity(ticker):
                         'score_breakdown': score_breakdown
                     }
                     
-                    # Add transaction date if we have it
-                    if trade_info and 'date' in trade_info:
-                        activity_entry['transaction_date'] = trade_info['date']
+                    # Add detailed transaction information if we have it
+                    if trade_info:
+                        if 'date' in trade_info:
+                            activity_entry['transaction_date'] = trade_info['date']
+                        
+                        # Include exchange information
+                        if 'exchange' in trade_info:
+                            activity_entry['exchange'] = trade_info['exchange']
+                            
+                        # Include exact timestamp if available
+                        if 'timestamp' in trade_info:
+                            activity_entry['timestamp'] = trade_info['timestamp']
+                            
+                        # Include human-readable timestamp if available
+                        if 'timestamp_human' in trade_info:
+                            activity_entry['timestamp_human'] = trade_info['timestamp_human']
                     
                     unusual_activity.append(activity_entry)
         
@@ -974,7 +987,15 @@ def get_simplified_unusual_activity_summary(ticker):
                 unusual_factors = [factor_descriptions.get(k, k) for k, v in sorted_factors if v > 0]
                 if unusual_factors:
                     unusual_factors_str = " and ".join(unusual_factors)
-                    summary += f"• Unusual activity score: {unusualness_score}/100 (based on {unusual_factors_str})\n\n"
+                    summary += f"• Unusual activity score: {unusualness_score}/100 (based on {unusual_factors_str})\n"
+                    
+                    # Add transaction time if available in human-readable format
+                    if 'timestamp_human' in top_activity:
+                        summary += f"• Largest trade occurred at: {top_activity['timestamp_human']}\n"
+                    elif 'transaction_date' in top_activity:
+                        summary += f"• Largest trade occurred on: {top_activity['transaction_date']}\n"
+                        
+                    summary += "\n"
     
     # Add bullish or bearish summary statement
     if overall_sentiment == "bullish":
