@@ -1014,40 +1014,6 @@ def get_simplified_unusual_activity_summary(ticker):
             main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
             
-            # Extract strike price from option symbol
-            strike_price = 0.0
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Format: O:TSLA250417C00250000 (strike = 250.00)
-                    import re
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-                        print(f"Extracted strike price {strike_price} from {symbol}")
-            
-            # Fallback to contract_parts if needed
-            if strike_price == 0.0 and len(contract_parts) >= 1:
-                try:
-                    strike_price = float(contract_parts[0])
-                except (ValueError, TypeError):
-                    # If conversion fails, keep the default
-                    pass
-            # Extract the actual strike price from the option symbol
-            strike_price = 0.0
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Extract the strike price from the option symbol (e.g., O:TSLA250417C00252500 -> 252.50)
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-            
-            # If we couldn't get the strike from the symbol, try using contract_parts
-            if strike_price == 0.0 and len(contract_parts) >= 1 and contract_parts[0].replace('.', '', 1).isdigit():
-                strike_price = float(contract_parts[0])
-            
-            
             # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
             if 'symbol' in main_contract:
                 symbol = main_contract['symbol']
@@ -1067,115 +1033,29 @@ def get_simplified_unusual_activity_summary(ticker):
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish** bet that\n"
-                summary += f"occurred on {timestamp_str.split()[0]} with "
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish bet\n"
+                summary += f"occurred at {timestamp_str} with "
             else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish**\n"
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
                 summary += f"bet with "
                 
-            # Extract strike price
-            # Extract strike price from option symbol
-            strike_price = None
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-            
-            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
-            if not strike_price and len(contract_parts) >= 1:
-                if contract_parts[0].replace('.', '', 1).isdigit():
-                    strike_price = float(contract_parts[0])
-                else:
-                    # Fallback to a default if we can't parse the strike
-                    strike_price = 0.0
-            
-            # Extract strike price
-            # Extract strike price from option symbol
-            strike_price = None
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-            
-            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
-            if not strike_price and len(contract_parts) >= 1:
-                if contract_parts[0].replace('.', '', 1).isdigit():
-                    strike_price = float(contract_parts[0])
-                else:
-                    # Fallback to a default if we can't parse the strike
-                    strike_price = 0.0
-            
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
-                # Extract strike price directly from the option symbol
-                strike_price = 0.0
-                if 'symbol' in main_contract:
-                    option_symbol = main_contract['symbol']
-                    # Format: O:TSLA250417C00250000 (strike = 250.00)
-                    if option_symbol.startswith('O:'):
-                        # Find the C or P in the symbol, then extract the strike
-                        match = re.search(r'[CP](\d{8})$', option_symbol)
-                        if match:
-                            # Convert to float and divide by 1000 to get actual strike
-                            strike_price = float(match.group(1)) / 1000
-                            print(f"Extracted strike price {strike_price} from {option_symbol}")
-                # Extract strike price directly from the option symbol
-                strike_price = 0.0
-                if 'symbol' in main_contract:
-                    option_symbol = main_contract['symbol']
-                    # Format: O:TSLA250417C00250000 (strike = 250.00)
-                    if option_symbol.startswith('O:'):
-                        # Find the C or P in the symbol, then extract the strike
-                        match = re.search(r'[CP](\d{8})$', option_symbol)
-                        if match:
-                            # Convert to float and divide by 1000 to get actual strike
-                            strike_price = float(match.group(1)) / 1000
-                            print(f"Extracted strike price {strike_price} from {option_symbol}")
                 if expiry_date:
-                    summary += f"in-the-money (${strike_price}.00) options expiring on {expiry_date}.\n\n"
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {expiry_date}.\n\n"
                 else:
-                    # Extract strike price directly from the option symbol
-                    strike_price = 0.0
-                    if 'symbol' in main_contract:
-                        option_symbol = main_contract['symbol']
-                        # Format: O:TSLA250417C00250000 (strike = 250.00)
-                        if option_symbol.startswith('O:'):
-                        # Find the C or P in the symbol, then extract the strike
-                        match = re.search(r'[CP](\d{8})$', option_symbol)
-                        if match:
-                            # Convert to float and divide by 1000 to get actual strike
-                            strike_price = float(match.group(1)) / 1000
-                            print(f"Extracted strike price {strike_price} from {option_symbol}")
-                # Extract strike price directly from the option symbol
-                strike_price = 0.0
-                if 'symbol' in main_contract:
-                    option_symbol = main_contract['symbol']
-                    # Format: O:TSLA250417C00250000 (strike = 250.00)
-                    if option_symbol.startswith('O:'):
-                        # Find the C or P in the symbol, then extract the strike
-                        match = re.search(r'[CP](\d{8})$', option_symbol)
-                        if match:
-                            # Convert to float and divide by 1000 to get actual strike
-                            strike_price = float(match.group(1)) / 1000
-                            print(f"Extracted strike price {strike_price} from {option_symbol}")
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${strike_price}.00) options expiring soon.\n\n"
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish** bet that\n"
-                summary += f"occurred on {timestamp_str.split()[0]} with options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish bet\n"
+                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bullish**\n"
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
                 summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
@@ -1191,40 +1071,6 @@ def get_simplified_unusual_activity_summary(ticker):
             main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
             
-            # Extract strike price from option symbol
-            strike_price = 0.0
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Format: O:TSLA250417C00250000 (strike = 250.00)
-                    import re
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-                        print(f"Extracted strike price {strike_price} from {symbol}")
-            
-            # Fallback to contract_parts if needed
-            if strike_price == 0.0 and len(contract_parts) >= 1:
-                try:
-                    strike_price = float(contract_parts[0])
-                except (ValueError, TypeError):
-                    # If conversion fails, keep the default
-                    pass
-            # Extract the actual strike price from the option symbol
-            strike_price = 0.0
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Extract the strike price from the option symbol (e.g., O:TSLA250417C00252500 -> 252.50)
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-            
-            # If we couldn't get the strike from the symbol, try using contract_parts
-            if strike_price == 0.0 and len(contract_parts) >= 1 and contract_parts[0].replace('.', '', 1).isdigit():
-                strike_price = float(contract_parts[0])
-            
-            
             # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
             if 'symbol' in main_contract:
                 symbol = main_contract['symbol']
@@ -1244,67 +1090,29 @@ def get_simplified_unusual_activity_summary(ticker):
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish** bet that\n"
-                summary += f"occurred on {timestamp_str.split()[0]} with "
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish**\n"
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish bet\n"
+                summary += f"occurred at {timestamp_str} with "
+            else:
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
                 summary += f"bet with "
                 
-            # Extract strike price
-            # Extract strike price from option symbol
-            strike_price = None
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-            
-            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
-            if not strike_price and len(contract_parts) >= 1:
-                if contract_parts[0].replace('.', '', 1).isdigit():
-                    strike_price = float(contract_parts[0])
-                else:
-                    # Fallback to a default if we can't parse the strike
-                    strike_price = 0.0
-            
-            # Extract strike price
-            # Extract strike price from option symbol
-            strike_price = None
-            if 'symbol' in main_contract:
-                symbol = main_contract['symbol']
-                if symbol.startswith('O:'):
-                    # Extract strike from symbol (e.g., O:TSLA250417C00252500 => 252.50)
-                    match = re.search(r'[CP](\d{8})$', symbol)
-                    if match:
-                        strike_price = float(match.group(1)) / 1000
-            
-            # If we couldn't get strike from symbol, use contract_parts[0] if it's numeric
-            if not strike_price and len(contract_parts) >= 1:
-                if contract_parts[0].replace('.', '', 1).isdigit():
-                    strike_price = float(contract_parts[0])
-                else:
-                    # Fallback to a default if we can't parse the strike
-                    strike_price = 0.0
-            
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${strike_price}.00) options expiring on {expiry_date}.\n\n"
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${strike_price}.00) options expiring soon.\n\n"
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish** bet that\n"
-                summary += f"occurred on {timestamp_str.split()[0]} with options from the largest unusual activity.\n\n"
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} **million bearish**\n"
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish bet\n"
+                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
+            else:
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
                 summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
@@ -1314,7 +1122,7 @@ def get_simplified_unusual_activity_summary(ticker):
             summary += f"• Institutional Investors are heavily favoring put options with dominant put volume.\n\n"
             
     else:
-        summary += f"• I'm seeing mixed activity for {ticker}, Inc.. There is balanced call and put activity.\n\n"
+        summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
     
     # Add overall flow percentages
     summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
