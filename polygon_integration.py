@@ -471,11 +471,12 @@ def get_option_chain(ticker, expiration_date=None):
         return option_chain_cache[cache_key]
     
     try:
-        # Build the API endpoint
+        # Build the API endpoint with a larger limit to ensure we get enough options
+        # This is crucial for unusual activity detection which needs near-the-money options
         if expiration_date:
-            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&expiration_date={expiration_date}&apiKey={POLYGON_API_KEY}"
+            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&expiration_date={expiration_date}&limit=1000&apiKey={POLYGON_API_KEY}"
         else:
-            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&apiKey={POLYGON_API_KEY}"
+            endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&limit=1000&apiKey={POLYGON_API_KEY}"
         
         # Use throttled API call
         response = throttled_api_call(endpoint, headers=get_headers())
@@ -642,25 +643,39 @@ def get_unusual_options_activity(ticker):
         forbidden_error_count = 0
         processed_options = 0
         
-        # Look for unusual volume and premium patterns
-        for option in chain:
-            option_symbol = option.get('ticker')
-            
-            if not option_symbol:
-                continue
+        # Filter options to only those that are near the money (within 10%)
+        near_money_options = []
+        if stock_price:
+            for option in chain:
+                option_symbol = option.get('ticker')
+                strike = option.get('strike_price')
+                expiry = option.get('expiration_date')
+                contract_type = option.get('contract_type', '').lower()
                 
-            # Get option details
+                # Skip if missing key info
+                if not option_symbol or not strike or not expiry or not contract_type:
+                    continue
+                
+                # Check if near the money
+                if abs(strike - stock_price) / stock_price <= 0.1:
+                    near_money_options.append(option)
+        
+        print(f"Found {len(near_money_options)} near-the-money options to analyze")
+        
+        # Set a reasonable limit to prevent timeouts
+        max_options_to_process = 50
+        if len(near_money_options) > max_options_to_process:
+            print(f"Limiting analysis to {max_options_to_process} options")
+            # Sort by proximity to current price for better analysis
+            near_money_options.sort(key=lambda x: abs(x.get('strike_price', 0) - stock_price))
+            near_money_options = near_money_options[:max_options_to_process]
+        
+        # Look for unusual volume and premium patterns
+        for option in near_money_options:
+            option_symbol = option.get('ticker')
             strike = option.get('strike_price')
             expiry = option.get('expiration_date')
             contract_type = option.get('contract_type', '').lower()
-            
-            # Skip if missing key info
-            if not strike or not expiry or not contract_type:
-                continue
-                
-            # Check if near the money (within 10%)
-            if stock_price and abs(strike - stock_price) / stock_price > 0.1:
-                continue  # Skip deep OTM/ITM options
                 
             # Get trades for this option
             endpoint = f"{BASE_URL}/v3/trades/{option_symbol}?limit=50&order=desc&apiKey={POLYGON_API_KEY}"
