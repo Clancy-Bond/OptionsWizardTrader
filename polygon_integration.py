@@ -1034,7 +1034,8 @@ def get_simplified_unusual_activity_summary(ticker):
             # Start the summary with integrated timestamp
             if timestamp_str:
                 summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** bet\n"
-                summary += f"occurred at {timestamp_str} with "
+                # Timestamp is now shown at the end of the next line
+            
             else:
                 summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish**\n"
                 summary += f"bet with "
@@ -1091,7 +1092,8 @@ def get_simplified_unusual_activity_summary(ticker):
             # Start the summary with integrated timestamp
             if timestamp_str:
                 summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** bet\n"
-                summary += f"occurred at {timestamp_str} with "
+                # Timestamp is now shown at the end of the next line
+            
             else:
                 summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish**\n"
                 summary += f"bet with "
