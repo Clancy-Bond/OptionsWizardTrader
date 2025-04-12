@@ -269,37 +269,79 @@ class OptionsBot(commands.Bot):
         # Get the simplified unusual activity summary
         response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
         
-        # Extract sentiment from the response text to set color
-        is_bullish = "bullish" in response_text.lower()
-        is_bearish = "bearish" in response_text.lower()
-        is_neutral = "neutral" in response_text.lower()
+        # Determine what type of response we have
+        using_fallback = "not available through our data provider" in response_text.lower()
+        no_activity = "no significant unusual options activity" in response_text.lower()
+        has_whale_emoji = "🐳" in response_text
         
-        # Set embed color based on sentiment
-        if is_bullish and not is_bearish:
-            embed_color = discord.Color.green()  # Green for bullish
-        elif is_bearish and not is_bullish:
-            embed_color = discord.Color.red()  # Red for bearish
-        else:
-            embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
-        
-        # Format response as Discord embed with whale emoji
-        embed = discord.Embed(
-            title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
-            color=embed_color
-        )
-        
-        # Use the formatted text directly from the summary (but skip the header since it's in the title)
-        if "📊" in response_text:
-            # Remove the header line (assumes header ends with first double newline)
+        if using_fallback:
+            # Data is limited due to API restrictions
+            embed = discord.Embed(
+                title=f"📊 {parsed['ticker']} Market Data",
+                color=discord.Color.blue()  # Blue for informational
+            )
+            
+            # Process the description
             header_end = response_text.find("\n\n")
             if header_end != -1:
                 description = response_text[header_end+2:]
             else:
                 description = response_text
-        else:
-            description = response_text
+                
+            embed.description = description
+            embed.set_footer(text="Some premium data requires API plan upgrade. Using basic stock data.")
             
-        embed.description = description
+        elif no_activity and not has_whale_emoji:
+            # No unusual activity detected
+            embed = discord.Embed(
+                title=f"📊 {parsed['ticker']} No Unusual Activity",
+                color=discord.Color.light_gray()  # Grey for neutral
+            )
+            
+            # Process the description
+            header_end = response_text.find("\n\n")
+            if header_end != -1:
+                description = response_text[header_end+2:]
+            else:
+                description = response_text
+                
+            embed.description = description
+            
+        else:
+            # Standard unusual activity response with sentiment
+            # Extract sentiment from the response text to set color
+            is_bullish = "bullish" in response_text.lower()
+            is_bearish = "bearish" in response_text.lower()
+            
+            # Set embed color based on sentiment
+            if is_bullish and not is_bearish:
+                embed_color = discord.Color.green()  # Green for bullish
+            elif is_bearish and not is_bullish:
+                embed_color = discord.Color.red()  # Red for bearish
+            else:
+                embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
+            
+            # Format response as Discord embed with whale emoji
+            embed = discord.Embed(
+                title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
+                color=embed_color
+            )
+            
+            # Process the description
+            if has_whale_emoji:
+                header_end = response_text.find("\n\n")
+                if header_end != -1:
+                    description = response_text[header_end+2:]
+                else:
+                    description = response_text
+            else:
+                description = response_text
+                
+            embed.description = description
+            
+        # Add timestamp to all responses
+        from datetime import datetime
+        embed.timestamp = datetime.now()
             
         await message.channel.send(embed=embed)
         
@@ -308,37 +350,79 @@ class OptionsBot(commands.Bot):
         # Get the simplified unusual activity summary - the same function works for "both"
         response_text = unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'])
         
-        # Extract sentiment from the response text to set color
-        is_bullish = "bullish" in response_text.lower()
-        is_bearish = "bearish" in response_text.lower()
-        is_neutral = "neutral" in response_text.lower()
+        # Determine what type of response we have
+        using_fallback = "not available through our data provider" in response_text.lower()
+        no_activity = "no significant unusual options activity" in response_text.lower()
+        has_whale_emoji = "🐳" in response_text
         
-        # Set embed color based on sentiment
-        if is_bullish and not is_bearish:
-            embed_color = discord.Color.green()  # Green for bullish
-        elif is_bearish and not is_bullish:
-            embed_color = discord.Color.red()  # Red for bearish
-        else:
-            embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
-        
-        # Format response as Discord embed with whale emoji
-        embed = discord.Embed(
-            title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
-            color=embed_color
-        )
-        
-        # Use the formatted text directly from the summary (but skip the header since it's in the title)
-        if "📊" in response_text:
-            # Remove the header line (assumes header ends with first double newline)
+        if using_fallback:
+            # Data is limited due to API restrictions
+            embed = discord.Embed(
+                title=f"📊 {parsed['ticker']} Market Data",
+                color=discord.Color.blue()  # Blue for informational
+            )
+            
+            # Process the description
             header_end = response_text.find("\n\n")
             if header_end != -1:
                 description = response_text[header_end+2:]
             else:
                 description = response_text
-        else:
-            description = response_text
+                
+            embed.description = description
+            embed.set_footer(text="Some premium data requires API plan upgrade. Using basic stock data.")
             
-        embed.description = description
+        elif no_activity and not has_whale_emoji:
+            # No unusual activity detected
+            embed = discord.Embed(
+                title=f"📊 {parsed['ticker']} No Unusual Activity",
+                color=discord.Color.light_gray()  # Grey for neutral
+            )
+            
+            # Process the description
+            header_end = response_text.find("\n\n")
+            if header_end != -1:
+                description = response_text[header_end+2:]
+            else:
+                description = response_text
+                
+            embed.description = description
+            
+        else:
+            # Standard unusual activity response with sentiment
+            # Extract sentiment from the response text to set color
+            is_bullish = "bullish" in response_text.lower()
+            is_bearish = "bearish" in response_text.lower()
+            
+            # Set embed color based on sentiment
+            if is_bullish and not is_bearish:
+                embed_color = discord.Color.green()  # Green for bullish
+            elif is_bearish and not is_bullish:
+                embed_color = discord.Color.red()  # Red for bearish
+            else:
+                embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
+            
+            # Format response as Discord embed with whale emoji
+            embed = discord.Embed(
+                title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
+                color=embed_color
+            )
+            
+            # Process the description
+            if has_whale_emoji:
+                header_end = response_text.find("\n\n")
+                if header_end != -1:
+                    description = response_text[header_end+2:]
+                else:
+                    description = response_text
+            else:
+                description = response_text
+                
+            embed.description = description
+            
+        # Add timestamp to all responses
+        from datetime import datetime
+        embed.timestamp = datetime.now()
             
         await message.channel.send(embed=embed)
 
