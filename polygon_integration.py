@@ -1498,7 +1498,12 @@ def get_simplified_unusual_activity_summary(ticker):
         emoji = "🟢" if sentiment == 'bullish' else "🔴" if sentiment == 'bearish' else "⚪"
         
         summary += f"{emoji} {contract}:\n"
-        summary += f"   {volume} contracts (${premium:,.0f} premium)\n"
+        
+        # If we have a transaction date, include it
+        if 'transaction_date' in item:
+            summary += f"   {volume} contracts on {item['transaction_date']} (${premium:,.0f} premium)\n"
+        else:
+            summary += f"   {volume} contracts (${premium:,.0f} premium)\n"
     
     # Add overall analysis
     if overall_sentiment == "bullish":
