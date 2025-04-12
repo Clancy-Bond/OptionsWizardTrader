@@ -6,16 +6,49 @@ import re
 from dotenv import load_dotenv
 from utils.theme_helper import setup_page
 from theme_selector import display_theme_selector
+import sys
 
-# Load environment variables
-load_dotenv()
+# Add a simplified update_discord_token function directly in this file
+def update_discord_token(token):
+    """Update Discord token in environment variable and .env file"""
+    # Update in-memory environment variable
+    os.environ["DISCORD_TOKEN_2"] = token
+    
+    # Update .env file
+    env_file = ".env"
+    if os.path.exists(env_file):
+        with open(env_file, "r") as f:
+            lines = f.readlines()
+        
+        token_set = False
+        new_lines = []
+        for line in lines:
+            if line.startswith("DISCORD_TOKEN_2="):
+                new_lines.append(f"DISCORD_TOKEN_2={token}\n")
+                token_set = True
+            else:
+                new_lines.append(line)
+        
+        if not token_set:
+            new_lines.append(f"DISCORD_TOKEN_2={token}\n")
+        
+        with open(env_file, "w") as f:
+            f.writelines(new_lines)
+    else:
+        with open(env_file, "w") as f:
+            f.write(f"DISCORD_TOKEN_2={token}\n")
+    
+    return True
 
-# Set page title and layout
+# Set page title and layout first (must be the first Streamlit command)
 st.set_page_config(
     page_title="Bot Configuration",
     page_icon="🤖",
     layout="wide"
 )
+
+# Load environment variables
+load_dotenv()
 
 # Display theme selector in sidebar
 display_theme_selector()
@@ -201,38 +234,22 @@ discord_token = os.getenv('DISCORD_TOKEN_2')
 
 if not discord_token:
     st.error("Discord token not found. Please set the DISCORD_TOKEN_2 environment variable.")
+    st.info("You need to configure the Discord token in the .env file or in your Replit Secrets.")
     
-    # Discord token input with custom styling
-    st.markdown('<div class="discord-header"><h3>Bot Token Setup</h3></div>', unsafe_allow_html=True)
-    with st.form("discord_token_form"):
-        token_input = st.text_input("Enter your Discord Bot Token", type="password")
-        
-        # Add some instructions
-        st.markdown("""
-        To find your bot token:
-        1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-        2. Select your application or create a new one
-        3. Go to the "Bot" tab
-        4. Click "Reset Token" or "Copy" if you already have one
-        """)
-        
-        submit_button = st.form_submit_button("Save Token")
-        
-        if submit_button and token_input:
-            # Use the token update function from simple_app for consistency
-            import sys
-            sys.path.append(".")
-            from simple_app import update_discord_token
-            
-            # Update the token
-            if update_discord_token(token_input):
-                # Update the in-memory token
-                os.environ["DISCORD_TOKEN_2"] = token_input
-                # Update the local variable 
-                discord_token = token_input
-                
-                st.success("Token saved successfully!")
-                st.rerun()
+    # Add some instructions for admins
+    st.markdown("""
+    ### Admin Instructions
+    
+    To configure the Discord token:
+    1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+    2. Select your application or create a new one
+    3. Go to the "Bot" tab
+    4. Click "Reset Token" or "Copy" if you already have one
+    5. Add the token to your environment variables as DISCORD_TOKEN_2
+    """)
+    
+    # Exit early if no token
+    st.stop()
 else:
     # Load saved permissions
     if "permissions" not in st.session_state:
@@ -298,21 +315,9 @@ else:
         
         with col2:
             if st.button("Reset Bot Token", help="Clear the saved Discord token"):
-                # Use environment approach to clear token
-                os.environ["DISCORD_TOKEN_2"] = ""
-                
-                # Update .env file
-                env_file = ".env"
-                if os.path.exists(env_file):
-                    with open(env_file, "r") as f:
-                        lines = f.readlines()
-                    
-                    with open(env_file, "w") as f:
-                        for line in lines:
-                            if not line.startswith("DISCORD_TOKEN_2="):
-                                f.write(line)
-                
-                st.warning("Token reset! Please enter a new token.")
+                # Use the imported update_discord_token function to reset the token
+                update_discord_token("")
+                st.warning("Token reset! Please configure a new token in your environment variables.")
                 st.rerun()
         
         with col3:
