@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 from polygon_trades import get_option_trade_data
+import math
 
 # Load environment variables
 load_dotenv()
@@ -610,6 +611,140 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
         return None
 
+def calculate_unusualness_score(option, trades, stock_price, option_data=None):
+    """
+    Calculate an unusualness score for an option based on multiple indicators
+    
+    Args:
+        option: The option data from Polygon API
+        trades: List of trades for this option
+        stock_price: Current price of the underlying stock
+        option_data: Additional option data if available
+        
+    Returns:
+        A score from 0-100 indicating how unusual the option activity is,
+        along with a breakdown of what factors contributed to this score
+    """
+    score = 0
+    score_breakdown = {}
+    
+    # Extract basic option information
+    strike = option.get('strike_price', 0)
+    contract_type = option.get('contract_type', '').lower()
+    expiration_date = option.get('expiration_date', '')
+    open_interest = option.get('open_interest', 0)
+    implied_volatility = option.get('implied_volatility', 0)
+    
+    # If we have no trades or basic data is missing, return 0 score
+    if not trades or not strike or not contract_type or not expiration_date:
+        return 0, {}
+    
+    # 1. Large Block Trades (0-25 points)
+    large_trades = [t for t in trades if t.get('size', 0) >= 10]  # Trades with 10+ contracts
+    largest_trade_size = max([t.get('size', 0) for t in trades], default=0)
+    
+    # Score based on largest single trade size
+    block_trade_score = 0
+    if largest_trade_size >= 100:
+        block_trade_score = 25  # Very large block
+    elif largest_trade_size >= 50:
+        block_trade_score = 20
+    elif largest_trade_size >= 20:
+        block_trade_score = 15
+    elif largest_trade_size >= 10:
+        block_trade_score = 10
+    elif largest_trade_size >= 5:
+        block_trade_score = 5
+    
+    score += block_trade_score
+    score_breakdown['block_trade'] = block_trade_score
+    
+    # 2. Volume to Open Interest Ratio (0-25 points)
+    total_volume = sum(t.get('size', 0) for t in trades)
+    
+    vol_oi_score = 0
+    if open_interest > 0:
+        vol_oi_ratio = total_volume / open_interest
+        if vol_oi_ratio >= 1.0:  # Volume exceeds open interest
+            vol_oi_score = 25
+        elif vol_oi_ratio >= 0.5:
+            vol_oi_score = 20
+        elif vol_oi_ratio >= 0.3:
+            vol_oi_score = 15
+        elif vol_oi_ratio >= 0.2:
+            vol_oi_score = 10
+        elif vol_oi_ratio >= 0.1:
+            vol_oi_score = 5
+    
+    score += vol_oi_score
+    score_breakdown['volume_to_oi'] = vol_oi_score
+    
+    # 3. Strike Price Distance (0-15 points)
+    # How far is the strike from current price
+    if stock_price > 0:
+        strike_distance = abs(strike - stock_price) / stock_price
+        
+        strike_score = 0
+        if strike_distance >= 0.2:  # 20%+ OTM
+            strike_score = 15
+        elif strike_distance >= 0.1:  # 10-20% OTM
+            strike_score = 10
+        elif strike_distance >= 0.05:  # 5-10% OTM
+            strike_score = 5
+        
+        score += strike_score
+        score_breakdown['strike_distance'] = strike_score
+    
+    # 4. Time to Expiration (0-15 points)
+    # Shorter-term options with unusual activity are more significant
+    try:
+        expiry_date = datetime.strptime(expiration_date, "%Y-%m-%d").date()
+        today = datetime.now().date()
+        days_to_expiry = (expiry_date - today).days
+        
+        expiry_score = 0
+        if days_to_expiry <= 7:  # Expiring within a week
+            expiry_score = 15
+        elif days_to_expiry <= 14:  # Expiring within two weeks
+            expiry_score = 10
+        elif days_to_expiry <= 30:  # Expiring within a month
+            expiry_score = 5
+        
+        score += expiry_score
+        score_breakdown['time_to_expiry'] = expiry_score
+    except Exception as e:
+        print(f"Error calculating expiry score: {e}")
+    
+    # 5. Premium Size (0-20 points)
+    avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / total_volume if total_volume > 0 else 0
+    total_premium = total_volume * 100 * avg_price  # Each contract is 100 shares
+    
+    premium_score = 0
+    if total_premium >= 1000000:  # $1M+
+        premium_score = 20
+    elif total_premium >= 500000:  # $500K+
+        premium_score = 15
+    elif total_premium >= 100000:  # $100K+
+        premium_score = 10
+    elif total_premium >= 50000:  # $50K+
+        premium_score = 5
+    
+    score += premium_score
+    score_breakdown['premium_size'] = premium_score
+    
+    # Calculate total score (max 100)
+    final_score = min(score, 100)
+    
+    # Add basic trade information for reference
+    score_breakdown['total_volume'] = total_volume
+    score_breakdown['total_premium'] = total_premium
+    score_breakdown['largest_trade'] = largest_trade_size
+    if open_interest > 0:
+        score_breakdown['vol_oi_ratio'] = round(total_volume / open_interest, 2)
+    
+    return final_score, score_breakdown
+
+
 def get_unusual_options_activity(ticker):
     """
     Get unusual options activity for a ticker based on volume spikes
@@ -698,21 +833,20 @@ def get_unusual_options_activity(ticker):
             # Print raw option data for debug
             print(f"Found {len(trades)} trades for {option_symbol}")
             
-            # Look for significant trades - lowering threshold to 5 contracts to catch more activity
-            # This is safe since we're already filtering for near-the-money options
-            large_trades = [t for t in trades if t.get('size', 0) >= 5]
-            if large_trades:
-                print(f"Found significant trade with size {max(t.get('size', 0) for t in large_trades)} for {option_symbol}")
-            
-            if large_trades:
-                # Calculate some metrics
-                total_volume = sum(t.get('size', 0) for t in large_trades)
-                avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in large_trades) / total_volume if total_volume > 0 else 0
-                total_premium = total_volume * 100 * avg_price  # Each contract is 100 shares
+            # Use our scoring system to evaluate unusual activity
+            if trades:
+                # Calculate unusualness score
+                unusualness_score, score_breakdown = calculate_unusualness_score(option, trades, stock_price)
+                print(f"Option {option_symbol} received unusualness score: {unusualness_score}")
                 
-                # Only include if premium is significant (>$10,000)
-                if total_premium > 10000:
-                    # Determine sentiment
+                # Only include options with a minimum score (30 is a reasonable threshold)
+                if unusualness_score >= 30:
+                    # Calculate metrics for the activity
+                    total_volume = sum(t.get('size', 0) for t in trades)
+                    avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / total_volume if total_volume > 0 else 0
+                    total_premium = total_volume * 100 * avg_price  # Each contract is 100 shares
+                    
+                    # Determine sentiment based on option type
                     sentiment = None
                     if contract_type == 'call':
                         sentiment = 'bullish'
@@ -721,26 +855,27 @@ def get_unusual_options_activity(ticker):
                     
                     # Get the actual transaction date if available
                     # We'll use our polygon_trades module to get the most significant trade
-                    
                     trade_info = None
                     try:
                         trade_info = get_option_trade_data(option_symbol)
                     except Exception as e:
                         print(f"Error getting trade data for {option_symbol}: {str(e)}")
-                        
-                    # Create activity entry with or without transaction date
+                    
+                    # Create activity entry with our new data
                     activity_entry = {
                         'contract': f"{ticker} {strike} {expiry} {contract_type.upper()}",
                         'volume': total_volume,
                         'avg_price': avg_price,
                         'premium': total_premium,
-                        'sentiment': sentiment
+                        'sentiment': sentiment,
+                        'unusualness_score': unusualness_score,
+                        'score_breakdown': score_breakdown
                     }
                     
                     # Add transaction date if we have it
                     if trade_info and 'date' in trade_info:
                         activity_entry['transaction_date'] = trade_info['date']
-                        
+                    
                     unusual_activity.append(activity_entry)
         
         # No fallback to Yahoo Finance - only using Polygon.io data as requested
@@ -749,8 +884,8 @@ def get_unusual_options_activity(ticker):
             # Return empty list to indicate no unusual activity found
             return []
         
-        # Sort by premium in descending order
-        unusual_activity.sort(key=lambda x: x['premium'], reverse=True)
+        # Sort by unusualness score in descending order, with premium as a secondary factor
+        unusual_activity.sort(key=lambda x: (x.get('unusualness_score', 0), x.get('premium', 0)), reverse=True)
         
         # Take top 5 (if we have that many)
         return unusual_activity[:5]
@@ -811,6 +946,35 @@ def get_simplified_unusual_activity_summary(ticker):
     
     # Create the summary with whale emojis in clean, bulleted format
     summary = f"🐳 {ticker} Unusual Options Activity 🐳\n\n"
+    
+    # Include top unusualness factors if available
+    if activity and len(activity) > 0 and 'score_breakdown' in activity[0]:
+        top_activity = activity[0]
+        score_breakdown = top_activity.get('score_breakdown', {})
+        unusualness_score = top_activity.get('unusualness_score', 0)
+        
+        if score_breakdown:
+            # Find the top contributing factors
+            sorted_factors = sorted(
+                [(k, v) for k, v in score_breakdown.items() if k not in ['total_volume', 'total_premium', 'largest_trade', 'vol_oi_ratio']],
+                key=lambda x: x[1],
+                reverse=True
+            )[:2]  # Get top 2 factors
+            
+            if sorted_factors:
+                factor_descriptions = {
+                    'block_trade': "large block trades",
+                    'volume_to_oi': "high volume relative to open interest",
+                    'strike_distance': "unusual strike price selection",
+                    'time_to_expiry': "short-term expiration",
+                    'premium_size': "large premium value"
+                }
+                
+                # Add unusualness score and key factors
+                unusual_factors = [factor_descriptions.get(k, k) for k, v in sorted_factors if v > 0]
+                if unusual_factors:
+                    unusual_factors_str = " and ".join(unusual_factors)
+                    summary += f"• Unusual activity score: {unusualness_score}/100 (based on {unusual_factors_str})\n\n"
     
     # Add bullish or bearish summary statement
     if overall_sentiment == "bullish":

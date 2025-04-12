@@ -1,0 +1,139 @@
+​To identify unusual options activity (UOA) using data from Polygon.io, you can focus on specific indicators that are accessible through their API. Here are key metrics and how to utilize them:​
+
+1. High Volume Relative to Open Interest
+Indicator: An option contract's daily trading volume significantly exceeds its open interest.​
+Polygon.io - Stock Market API
++1
+Polygon.io - Stock Market API
++1
+
+Data Points:
+
+volume​
+
+open_interest​
+Polygon.io - Stock Market API
+
+Polygon.io Endpoint: GET /v3/reference/options/contracts/{options_ticker}​
+Polygon.io - Stock Market API
++1
+Postman API Platform
++1
+
+Example: If an option has an open interest of 500 contracts but trades 2,000 contracts in a day, this may indicate unusual activity.​
+
+2. Large Block Trades
+Indicator: Single trades involving a large number of contracts, often executed by institutional investors.​
+
+Data Points:
+
+size (number of contracts in a trade)​
+
+Polygon.io Endpoint: GET /v3/trades/options/{options_ticker}​
+Polygon.io - Stock Market API
++1
+polygon.readthedocs.io
++1
+
+Example: A single trade of 10,000 contracts when the average trade size is 100 contracts.​
+
+3. Implied Volatility (IV) Surges
+Indicator: A sudden increase in an option's implied volatility, suggesting anticipated market-moving events.​
+
+Data Points:
+
+implied_volatility​
+
+Polygon.io Endpoint: GET /v3/reference/options/contracts/{options_ticker}​
+Polygon.io - Stock Market API
+
+Example: An option's IV jumps from 20% to 35% within a short period.​
+
+4. Unusual Strike Price Activity
+Indicator: High trading volume in options with strike prices far from the current underlying asset price.​
+
+Data Points:
+
+strike_price​
+Polygon.io - Stock Market API
++2
+Polygon.io - Stock Market API
++2
+Polygon.io - Stock Market API
++2
+
+underlying_price (requires separate query)​
+
+Polygon.io Endpoints:
+
+GET /v3/reference/options/contracts/{options_ticker}​
+Polygon.io - Stock Market API
++2
+Polygon.io - Stock Market API
++2
+Postman API Platform
++2
+
+GET /v2/snapshot/locale/us/markets/stocks/tickers/{ticker} (for underlying price)​
+Postman API Platform
+
+Example: Significant volume in a call option with a strike price 20% above the current stock price.​
+
+5. Skewed Put/Call Ratios
+Indicator: An unusually high or low ratio of put to call option volume, indicating bearish or bullish sentiment.​
+
+Data Points:
+
+Aggregate volume for puts and calls​
+
+Polygon.io Endpoint: GET /v3/reference/options/contracts​
+Polygon.io - Stock Market API
++2
+Polygon.io - Stock Market API
++2
+Polygon.io - Stock Market API
++2
+
+Example: A put/call volume ratio of 3:1 when the average is 1:1.​
+
+6. Short-Term Expirations with High Volume
+Indicator: Options nearing expiration experiencing unusually high trading volume.​
+
+Data Points:
+
+expiration_date​
+Postman API Platform
++5
+Polygon.io - Stock Market API
++5
+Polygon.io - Stock Market API
++5
+
+volume​
+
+Polygon.io Endpoint: GET /v3/reference/options/contracts/{options_ticker}​
+
+Example: An option expiring in two days sees a spike in volume to 5,000 contracts from an average of 500.​
+
+7. Trade Execution at Bid/Ask Extremes
+Indicator: Large trades executed at the ask price suggest aggressive buying; at the bid price, aggressive selling.​
+
+Data Points:
+
+price​
+
+bid_price​
+Polygon.io - Stock Market API
++1
+Polygon.io - Stock Market API
++1
+
+ask_price​
+
+Polygon.io Endpoint: GET /v3/trades/options/{options_ticker}​
+Polygon.io - Stock Market API
+
+Example: A trade executed at the ask price in a large volume may indicate strong buying interest.​
+Polygon.io - Stock Market API
+
+By monitoring these indicators using Polygon.io's API, your bot can effectively identify and flag unusual options activity for further analysis.
