@@ -69,6 +69,11 @@ def throttled_api_call(url, headers=None):
     # Make the API call
     response = requests.get(url, headers=headers)
     
+    # Debug log for 403 errors
+    if response.status_code == 403:
+        print(f"403 Forbidden error for URL: {url}")
+        print(f"Response: {response.text}")
+    
     # Update last call time
     _last_api_call = time.time()
     
@@ -358,7 +363,7 @@ def get_option_expirations(ticker):
     ticker = ticker.upper()
     
     try:
-        endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&limit=1000"
+        endpoint = f"{BASE_URL}/v3/reference/options/contracts?underlying_ticker={ticker}&limit=1000&apiKey={POLYGON_API_KEY}"
         response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
@@ -422,7 +427,7 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
             return None
         
         # Now get the latest price for this option
-        endpoint = f"{BASE_URL}/v2/last/trade/{option_symbol}"
+        endpoint = f"{BASE_URL}/v2/last/trade/{option_symbol}?apiKey={POLYGON_API_KEY}"
         response = throttled_api_call(endpoint, headers=get_headers())
         
         if response.status_code != 200:
@@ -491,7 +496,7 @@ def get_unusual_options_activity(ticker):
                 continue  # Skip deep OTM/ITM options
                 
             # Get trades for this option
-            endpoint = f"{BASE_URL}/v3/trades/{option_symbol}?limit=50&order=desc"
+            endpoint = f"{BASE_URL}/v3/trades/{option_symbol}?limit=50&order=desc&apiKey={POLYGON_API_KEY}"
             response = throttled_api_call(endpoint, headers=get_headers())
             
             if response.status_code != 200:
