@@ -1408,6 +1408,9 @@ def get_simplified_unusual_activity_summary(ticker):
                     if current_price:
                         response += f" Current price: ${current_price:.2f}"
                 
+                # Close the code block for proper Discord formatting
+                response += "\n```"
+                
                 return response
                 
             except Exception as options_error:
@@ -1436,12 +1439,18 @@ def get_simplified_unusual_activity_summary(ticker):
             response += "\nFor real-time options sentiment, consider checking volume patterns on your trading platform."
             response += "\nSome premium data requires API plan upgrade. Using basic stock data."
             
+            # Close the code block for Discord formatting
+            response += "\n```"
+            
             return response
             
         except Exception as e:
             print(f"Yahoo Finance fallback also failed: {str(e)}")
             
-        return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
+        # Add colored border (gray for neutral)
+        border_color = "```\n"
+        message = f"{border_color}\n📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume.\n```"
+        return message
     
     # Determine overall sentiment
     bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
@@ -1484,5 +1493,18 @@ def get_simplified_unusual_activity_summary(ticker):
         summary += "\nLarge traders are showing bearish sentiment with significant put buying."
     else:
         summary += "\nMixed sentiment with balanced call and put activity."
+    
+    # Add overall flow in bold (if we have enough information)
+    bullish_count = len([item for item in activity if item.get('sentiment') == 'bullish'])
+    bearish_count = len([item for item in activity if item.get('sentiment') == 'bearish'])
+    total_count = bullish_count + bearish_count
+    
+    if total_count > 0:
+        bullish_pct = (bullish_count / total_count) * 100
+        bearish_pct = 100 - bullish_pct
+        summary += f"\n\n**Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish**"
+    
+    # Close the code block
+    summary += "\n```"
     
     return summary

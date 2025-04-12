@@ -250,7 +250,10 @@ def get_simplified_unusual_activity_summary(ticker):
         unusual_activity = get_unusual_options_activity(ticker)
         
         if not unusual_activity:
-            return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
+            # Add gray code block for the no activity message
+            border_color = "```\n"
+            message = f"{border_color}\n📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume.\n```"
+            return message
         
         # Get stock info
         info = stock.info
@@ -312,11 +315,24 @@ def get_simplified_unusual_activity_summary(ticker):
         else:
             response += "\nMixed sentiment with balanced call and put activity."
             
+        # Calculate and add the overall flow percentages in bold
+        total_activity = len(bullish_activity) + len(bearish_activity)
+        if total_activity > 0:
+            bullish_pct = (len(bullish_activity) / total_activity) * 100
+            bearish_pct = (len(bearish_activity) / total_activity) * 100
+            response += f"\n\n**Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish**"
+            
+        # Close the code block for Discord formatting
+        response += "\n```"
+            
         return response
         
     except Exception as e:
         print(f"Error generating simplified unusual activity summary: {str(e)}")
-        return f"📊 Unable to analyze unusual options activity for {ticker} due to an error."
+        # Add gray code block for the error message
+        border_color = "```\n"
+        message = f"{border_color}\n📊 Unable to analyze unusual options activity for {ticker} due to an error.\n\nPlease try again later or check that the ticker symbol is valid.\n```"
+        return message
 
 def detect_unusual_options_flow(options_data):
     """
