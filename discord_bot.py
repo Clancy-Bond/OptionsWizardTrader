@@ -59,15 +59,30 @@ class OptionsBotNLP:
         """Parse a natural language query for options trading parameters"""
         query = query.lower()
         
-        # Extract ticker using findall to get all matches (same as UnusualOptionsNLP)
+        # Extract ticker using findall to get all matches
         ticker_matches = re.findall(self.ticker_pattern, query, re.IGNORECASE)
+        
+        # Process matches - our pattern can return tuples if there are multiple capture groups
+        processed_matches = []
+        for match in ticker_matches:
+            if isinstance(match, tuple):
+                # Process each group in the tuple that's not empty
+                for group in match:
+                    if group and len(group) > 0:
+                        processed_matches.append(group)
+            else:
+                processed_matches.append(match)
         
         # Filter out non-tickers and common words
         valid_tickers = []
-        for match in ticker_matches:
+        for match in processed_matches:
             # Convert to uppercase for consistent comparison
             match_upper = match.upper()
             
+            # Skip empty or too short matches
+            if not match_upper or len(match_upper) < 1:
+                continue
+                
             # Skip common words
             if match_upper in self.excluded_words:
                 continue
@@ -84,8 +99,8 @@ class OptionsBotNLP:
             # No valid ticker was found, but this is an unusual activity request
             ticker = None  # Let the bot show a message asking for a ticker
         # Legacy fallback - first potential ticker that's not excluded
-        elif ticker_matches:
-            potential_ticker = ticker_matches[0].upper()
+        elif processed_matches:
+            potential_ticker = processed_matches[0].upper()
             if potential_ticker not in self.excluded_words:
                 ticker = potential_ticker
             else:
