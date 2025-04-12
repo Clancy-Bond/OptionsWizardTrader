@@ -1,60 +1,55 @@
+#!/usr/bin/env python3
 """
-Test the timestamp and format for a specific option
-This focused test helps us verify our timestamp formatting without processing the entire chain
+Targeted test script to verify the formatting changes for unusual options activity
 """
-import sys
-from polygon_trades import get_option_trade_data, format_timestamp
-from datetime import datetime
-import pytz
+import re
+import json
+from polygon_integration import get_simplified_unusual_activity_summary
 
-def test_specific_option(option_symbol):
-    """
-    Test timestamp formatting for a specific option
+def print_formatted_output(ticker="AAPL"):
+    """Print the unusual options activity output for a specific ticker"""
+    print(f"Getting unusual options activity for {ticker}...")
     
-    Args:
-        option_symbol: Option symbol in Polygon format (e.g., O:AAPL250417C00195000)
-    """
-    print(f"\n===== TESTING TIMESTAMP FORMAT FOR: {option_symbol} =====\n")
+    # Set max options to a very small number to speed up processing
+    import polygon_integration
+    original_max = polygon_integration.max_options_to_process if hasattr(polygon_integration, 'max_options_to_process') else 50
+    polygon_integration.max_options_to_process = 5
     
-    # Get trade data for this specific option
-    try:
-        trade_data = get_option_trade_data(option_symbol)
+    # Get the summary
+    summary = get_simplified_unusual_activity_summary(ticker)
+    
+    # Restore original value
+    polygon_integration.max_options_to_process = original_max
+    
+    # Print the formatted output
+    print("\n===== UNUSUAL OPTIONS ACTIVITY OUTPUT =====\n")
+    print(summary[:1000])  # Only print first part to reduce output size
+    
+    # Find and extract the first bullet point
+    first_bullet = re.search(r'• I\'m seeing.*?\.', summary)
+    if first_bullet:
+        formatted_line = first_bullet.group(0)
+        print("\nExtracted first line for format checking:")
+        print(formatted_line)
         
-        if trade_data:
-            print(f"Trade data found:")
-            for key, value in trade_data.items():
-                print(f"  {key}: {value}")
-                
-            # Focus on timestamp formatting
-            if 'timestamp_human' in trade_data:
-                print(f"\nFormatted timestamp: {trade_data['timestamp_human']}")
-                
-                # Analyze the format
-                timestamp_parts = trade_data['timestamp_human'].split()
-                if len(timestamp_parts) >= 3:
-                    date_part = timestamp_parts[0]
-                    time_part = " ".join(timestamp_parts[1:3])
-                    timezone_part = timestamp_parts[3] if len(timestamp_parts) > 3 else ""
-                    
-                    print(f"Date part: {date_part}")
-                    print(f"Time part: {time_part}")
-                    print(f"Timezone: {timezone_part}")
-                    
-                    # Check if it matches our desired format (MM/DD/YY HH:MM:SS AM/PM ET)
-                    if '/' in date_part and ('AM' in time_part or 'PM' in time_part) and 'ET' in timezone_part:
-                        print("\n✅ TIMESTAMP FORMAT CORRECT")
-                    else:
-                        print("\n❌ TIMESTAMP FORMAT INCORRECT")
-                        print("Expected format: MM/DD/YY HH:MM:SS AM/PM ET")
+        # Check if our format changes are present
+        checks = {
+            "strongly": "strongly" in formatted_line,
+            "Inc.": f"{ticker}, Inc." in formatted_line,
+            "**$ million": "**$" in formatted_line and "million" in formatted_line,
+            "in-the-money": "in-the-money" in summary,
+            "($XX.XX)": re.search(r'\(\$\d+\.\d+\)', summary) is not None,
+            "purchased": ", purchased" in summary
+        }
+        
+        print("\nFormat checks:")
+        for key, value in checks.items():
+            print(f"  {'✅' if value else '❌'} {key}")
+            
+        if all(checks.values()):
+            print("\n✅ All format requirements have been implemented!")
         else:
-            print("No trade data found for this option.")
-    except Exception as e:
-        print(f"Error testing option: {str(e)}")
+            print("\n❌ Some format requirements are missing. Further changes needed.")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        option_symbol = sys.argv[1]
-    else:
-        option_symbol = "O:AAPL250417C00195000"  # Default test option
-    
-    test_specific_option(option_symbol)
+    print_formatted_output("TSLA")

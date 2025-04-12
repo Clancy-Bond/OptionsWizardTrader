@@ -1,46 +1,47 @@
 #!/usr/bin/env python3
 """
-Test script to show the unusual options activity output with updated formatting
+Test script to check if the unusual options activity formatting has been correctly updated
 """
-import re
 from polygon_integration import get_simplified_unusual_activity_summary
 
-def test_unusual_activity(ticker="AAPL"):
-    """
-    Test the unusual activity detection with new formatting
-    """
-    print(f"\n===== Testing Unusual Options Activity for {ticker} =====\n")
+def test_formatting():
+    """Test the updated formatting for unusual options activity"""
+    ticker = "TSLA"
+    print(f"\nTesting unusual activity formatting for {ticker}...\n")
     
-    activity_summary = get_simplified_unusual_activity_summary(ticker)
-    print("\n===== FORMATTED OUTPUT =====\n")
-    print(activity_summary)
+    # Get the unusual activity summary
+    summary = get_simplified_unusual_activity_summary(ticker)
     
-    # Format tests
-    checks = [
-        ("✅" if "strongly bullish activity for" in activity_summary or 
-                "strongly bearish activity for" in activity_summary else "❌", 
-         "Using 'strongly bullish/bearish activity for [Ticker], Inc.' format"),
-        
-        ("✅" if "**million bullish**" in activity_summary or 
-                "**million bearish**" in activity_summary else "❌", 
-         "Bolding 'million bullish/bearish' text"),
-        
-        ("✅" if re.search(r"in-the-money \(\$\d+\.\d+\)", activity_summary) else "❌", 
-         "Using 'in-the-money ($245.00)' format"),
-        
-        ("✅" if "occurred on" in activity_summary and 
-                not re.search(r"occurred (on|at) \d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}", activity_summary) else "❌", 
-         "Date format without time component"),
-        
-        ("✅" if "Unusual activity score:" not in activity_summary else "❌", 
-         "Removed 'Unusual activity score' line")
-    ]
+    # Print the formatted output
+    print("\n===== UNUSUAL OPTIONS ACTIVITY OUTPUT =====\n")
+    print(summary)
     
-    print("\n===== FORMAT VERIFICATION =====\n")
-    for check_result, check_description in checks:
-        print(f"{check_result} {check_description}")
+    # Check if the updated format is present
+    if "strongly bullish activity for TSLA, Inc." in summary or "strongly bearish activity for TSLA, Inc." in summary:
+        print("\n✅ Found 'strongly bullish/bearish activity for TSLA, Inc.' format")
+    else:
+        print("\n❌ Did not find 'strongly bullish/bearish activity for TSLA, Inc.' format")
+    
+    if "in-the-money ($" in summary:
+        print("✅ Found 'in-the-money ($X.XX)' format")
+    else:
+        print("❌ Did not find 'in-the-money ($X.XX)' format")
+        
+    if ", purchased " in summary:
+        print("✅ Found purchase date at the end of option description")
+    else:
+        print("❌ Did not find purchase date at the end of option description")
+        
+    if "**$" in summary and " million bullish**" in summary or " million bearish**" in summary:
+        print("✅ Found bolded premium amounts")
+    else:
+        print("❌ Did not find bolded premium amounts")
+    
+    # Check for the old format that should be gone
+    if "-the-money ($" in summary:
+        print("❌ Still found old format '-the-money ($X)' in output")
+    else:
+        print("✅ Successfully removed old format '-the-money ($X)'")
 
 if __name__ == "__main__":
-    import sys
-    ticker = sys.argv[1] if len(sys.argv) > 1 else "AAPL"
-    test_unusual_activity(ticker)
+    test_formatting()
