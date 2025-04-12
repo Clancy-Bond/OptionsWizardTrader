@@ -250,10 +250,7 @@ def get_simplified_unusual_activity_summary(ticker):
         unusual_activity = get_unusual_options_activity(ticker)
         
         if not unusual_activity:
-            # Add gray code block for the no activity message
-            border_color = "```\n"
-            message = f"{border_color}\n📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume.\n```"
-            return message
+            return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
         
         # Get stock info
         info = stock.info
@@ -283,16 +280,8 @@ def get_simplified_unusual_activity_summary(ticker):
         else:
             overall_sentiment = "NEUTRAL"
         
-        # Create a response with whale emojis in title and colored border
-        # Add Discord formatting for colored border
-        if "BULLISH" in overall_sentiment:
-            response = "```diff\n+"  # Green border for bullish
-        elif "BEARISH" in overall_sentiment:
-            response = "```diff\n-"  # Red border for bearish
-        else:
-            response = "```"  # Gray/default border for neutral
-            
-        response += f"\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
+        # Create a response with whale emojis in title
+        response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
         
         # Format details for each activity (limit to top 5)
         for i, item in enumerate(all_activity[:5]):
@@ -314,24 +303,11 @@ def get_simplified_unusual_activity_summary(ticker):
         else:
             response += "\nMixed sentiment with balanced call and put activity."
             
-        # Calculate and add the overall flow percentages in bold
-        total_activity = len(bullish_activity) + len(bearish_activity)
-        if total_activity > 0:
-            bullish_pct = (len(bullish_activity) / total_activity) * 100
-            bearish_pct = (len(bearish_activity) / total_activity) * 100
-            response += f"\n\n**Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish**"
-            
-        # Close the code block for Discord formatting
-        response += "\n```"
-            
         return response
         
     except Exception as e:
         print(f"Error generating simplified unusual activity summary: {str(e)}")
-        # Add gray code block for the error message
-        border_color = "```\n"
-        message = f"{border_color}\n📊 Unable to analyze unusual options activity for {ticker} due to an error.\n\nPlease try again later or check that the ticker symbol is valid.\n```"
-        return message
+        return f"📊 Unable to analyze unusual options activity for {ticker} due to an error."
 
 def detect_unusual_options_flow(options_data):
     """

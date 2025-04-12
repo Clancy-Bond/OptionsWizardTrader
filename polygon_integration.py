@@ -1361,15 +1361,8 @@ def get_simplified_unusual_activity_summary(ticker):
                                     'sentiment': 'bearish'
                                 }
                     
-                # Format the response in the style of the unusual options activity report with colored border based on sentiment
-                if "BULLISH" in overall_sentiment:
-                    response = "```diff\n+"  # Green border for bullish
-                elif "BEARISH" in overall_sentiment:
-                    response = "```diff\n-"  # Red border for bearish
-                else:
-                    response = "```"  # Gray/default border for neutral
-                
-                response += f"\n🐳 {ticker} Unusual Options Activity 🐳\n"
+                # Format the response in the style of the unusual options activity report
+                response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
                 
                 # If we have a significant options position to report
                 if biggest_option and biggest_option['premium'] > 100000:  # Only show if premium > $100k
@@ -1377,9 +1370,9 @@ def get_simplified_unusual_activity_summary(ticker):
                     emoji = "🟢" if biggest_option['sentiment'] == 'bullish' else "🔴"
                     premium_millions = biggest_option['premium'] / 1000000
                     
-                    # Add first bullet point about biggest flow with bold for the dollar amount
-                    response += f"• I'm seeing strongly {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
-                    response += f"**${premium_millions:.1f} million {biggest_option['sentiment']}** "  # Bold the dollar amount and sentiment
+                    # Add first bullet point about biggest flow
+                    response += f"• I'm seeing {biggest_option['sentiment']} activity for {ticker}. The largest flow is a "
+                    response += f"${premium_millions:.1f} million {biggest_option['sentiment']} "
                     response += f"bet with {'in-the-money' if current_price > biggest_option['strike'] else 'out-of-the-money'} "
                     response += f"(${biggest_option['strike']:.0f}) options expiring on {biggest_option['expiry']}.\n\n"
                 
@@ -1395,20 +1388,17 @@ def get_simplified_unusual_activity_summary(ticker):
                     else:
                         response += f"showing mixed positioning with a {ratio:.1f}:1 {dominant_type}/{'put' if dominant_type == 'call' else 'call'} ratio.\n\n"
                 
-                # Add overall flow analysis with bold formatting
+                # Add overall flow analysis
                 if calls_volume > 0 or puts_volume > 0:
                     bullish_pct = (calls_volume / (calls_volume + puts_volume)) * 100 if calls_volume + puts_volume > 0 else 50
                     bearish_pct = 100 - bullish_pct
-                    response += f"**Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish**"
+                    response += f"Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish"
                 
                 # Add premium data notice at the bottom
                 if current_price and not (biggest_option and biggest_option['premium'] > 100000):
                     response += "\n\nSome premium options data requires API plan upgrade."
                     if current_price:
                         response += f" Current price: ${current_price:.2f}"
-                
-                # Close the code block for proper Discord formatting
-                response += "\n```"
                 
                 return response
                 
@@ -1438,18 +1428,12 @@ def get_simplified_unusual_activity_summary(ticker):
             response += "\nFor real-time options sentiment, consider checking volume patterns on your trading platform."
             response += "\nSome premium data requires API plan upgrade. Using basic stock data."
             
-            # Close the code block for Discord formatting
-            response += "\n```"
-            
             return response
             
         except Exception as e:
             print(f"Yahoo Finance fallback also failed: {str(e)}")
             
-        # Add colored border (gray for neutral)
-        border_color = "```\n"
-        message = f"{border_color}\n📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume.\n```"
-        return message
+        return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
     
     # Determine overall sentiment
     bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
@@ -1462,16 +1446,8 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Create the summary with whale emojis and colored border based on sentiment
-    # Add Discord formatting for colored border
-    if overall_sentiment == "bullish":
-        summary = "```diff\n+"  # Green border for bullish
-    elif overall_sentiment == "bearish":
-        summary = "```diff\n-"  # Red border for bearish
-    else:
-        summary = "```"  # Gray/default border for neutral
-    
-    summary += f"\n🐳 {ticker} Unusual Options Activity 🐳\n\n"
+    # Create the summary with whale emojis
+    summary = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment.upper()} BIAS 🐳\n\n"
     
     for i, item in enumerate(activity):
         contract = item.get('contract', '')
@@ -1491,18 +1467,5 @@ def get_simplified_unusual_activity_summary(ticker):
         summary += "\nLarge traders are showing bearish sentiment with significant put buying."
     else:
         summary += "\nMixed sentiment with balanced call and put activity."
-    
-    # Add overall flow in bold (if we have enough information)
-    bullish_count = len([item for item in activity if item.get('sentiment') == 'bullish'])
-    bearish_count = len([item for item in activity if item.get('sentiment') == 'bearish'])
-    total_count = bullish_count + bearish_count
-    
-    if total_count > 0:
-        bullish_pct = (bullish_count / total_count) * 100
-        bearish_pct = 100 - bullish_pct
-        summary += f"\n\n**Overall flow: {bullish_pct:.0f}% bullish / {bearish_pct:.0f}% bearish**"
-    
-    # Close the code block
-    summary += "\n```"
     
     return summary
