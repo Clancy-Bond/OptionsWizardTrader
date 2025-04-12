@@ -43,9 +43,25 @@ discord_token = os.getenv('DISCORD_TOKEN_2')
 if discord_token:
     st.success("✅ Discord Bot is configured and ready to use")
     
-    # Display invitation URL (normally this would come from the bot itself)
-    invitation_url = "https://discord.com/oauth2/authorize?client_id=1354551896605589584&scope=bot&permissions=379904"
-    st.markdown(f"**Bot Invitation URL**: [Click to invite bot to your server]({invitation_url})")
+    # Dynamically generate the invitation URL based on the bot ID
+    try:
+        # Try to ping the Discord API with the token to check validity
+        import requests
+        headers = {"Authorization": f"Bot {discord_token}"}
+        response = requests.get("https://discord.com/api/v10/users/@me", headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            bot_id = data.get("id", "")
+            if bot_id:
+                invitation_url = f"https://discord.com/api/oauth2/authorize?client_id={bot_id}&permissions=379904&scope=bot"
+                st.markdown(f"**Bot Invitation URL**: [Click to invite bot to your server]({invitation_url})")
+            else:
+                st.warning("Could not retrieve bot ID. Please go to Discord Bot Configuration page.")
+        else:
+            st.warning("Could not connect to Discord API. Please check your token on the Discord Bot Configuration page.")
+    except Exception as e:
+        st.warning(f"Error connecting to Discord: {str(e)}")
     
     # Quick navigation to Discord configuration
     st.markdown("**[Go to Discord Bot Configuration →](/Discord_Bot_Config)**")

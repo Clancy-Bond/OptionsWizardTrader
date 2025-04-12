@@ -219,11 +219,20 @@ if not discord_token:
         submit_button = st.form_submit_button("Save Token")
         
         if submit_button and token_input:
-            # Create or update the .env file with the token
-            with open(".env", "a") as f:
-                f.write(f"\nDISCORD_TOKEN_2={token_input}")
-            st.success("Token saved! Please restart the application.")
-            st.rerun()
+            # Use the token update function from simple_app for consistency
+            import sys
+            sys.path.append(".")
+            from simple_app import update_discord_token
+            
+            # Update the token
+            if update_discord_token(token_input):
+                # Update the in-memory token
+                os.environ["DISCORD_TOKEN_2"] = token_input
+                # Update the local variable 
+                discord_token = token_input
+                
+                st.success("Token saved successfully!")
+                st.rerun()
 else:
     # Load saved permissions
     if "permissions" not in st.session_state:
@@ -289,12 +298,20 @@ else:
         
         with col2:
             if st.button("Reset Bot Token", help="Clear the saved Discord token"):
-                with open(".env", "r") as f:
-                    lines = f.readlines()
-                with open(".env", "w") as f:
-                    for line in lines:
-                        if not line.startswith("DISCORD_TOKEN_2="):
-                            f.write(line)
+                # Use environment approach to clear token
+                os.environ["DISCORD_TOKEN_2"] = ""
+                
+                # Update .env file
+                env_file = ".env"
+                if os.path.exists(env_file):
+                    with open(env_file, "r") as f:
+                        lines = f.readlines()
+                    
+                    with open(env_file, "w") as f:
+                        for line in lines:
+                            if not line.startswith("DISCORD_TOKEN_2="):
+                                f.write(line)
+                
                 st.warning("Token reset! Please enter a new token.")
                 st.rerun()
         
