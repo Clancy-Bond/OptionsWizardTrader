@@ -118,14 +118,18 @@ class OptionsBot(commands.Bot):
         # Parse the query
         parsed = self.nlp.parse_query(content)
         
-        # For unusual activity requests, if no option type is provided, we'll default to checking both
-        if parsed['request_type'] == 'unusual' and parsed['ticker'] and not parsed['option_type']:
-            await self.handle_unusual_activity_for_both(message, parsed)
+        # Check if we have the minimum required information
+        if not parsed['ticker']:
+            await message.channel.send("❌ I need at least a ticker symbol. Example: @OptionsWizard What's the unusual options activity for TSLA?")
             return
-        
-        # Check if we have the minimum required information for other requests
-        if not parsed['ticker'] or not parsed['option_type']:
-            await message.channel.send("❌ I need at least a ticker symbol and option type (call/put). Example: @OptionsWizard What's a good stop loss for AAPL 180 calls expiring next month?")
+            
+        # For unusual activity, we can work without option type
+        if parsed['request_type'] == 'unusual' and not parsed['option_type']:
+            # Default to both 'call' and 'put'
+            parsed['option_type'] = 'both'
+        # For other request types, option type is required
+        elif not parsed['option_type']:
+            await message.channel.send("❌ I need a ticker symbol and option type (call/put). Example: @OptionsWizard What's a good stop loss for AAPL 180 calls expiring next month?")
             return
         
         # Handle the request based on the type
@@ -193,6 +197,11 @@ class OptionsBot(commands.Bot):
         
     async def handle_unusual_activity_request(self, message, parsed):
         """Handle unusual options activity requests"""
+        # If option_type is 'both', use the combined function
+        if parsed['option_type'] == 'both':
+            await self.handle_unusual_activity_for_both(message, parsed)
+            return
+            
         # Call unusual activity module
         result = unusual_activity.detect_unusual_activity(
             ticker=parsed['ticker'],
