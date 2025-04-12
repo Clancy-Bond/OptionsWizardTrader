@@ -82,215 +82,33 @@ def detect_unusual_activity(ticker, option_type):
 
 def get_unusual_options_activity(ticker):
     """
-    Identify unusual options activity for a given ticker.
+    Identify unusual options activity for a given ticker using only Polygon.io data.
     
     Args:
         ticker: Stock ticker symbol
     
     Returns:
-        List of unusual options activity with sentiment
+        List of unusual options activity with sentiment, or empty list if Polygon.io API key is not available
     """
+    # Only proceed if Polygon API key is available
+    if not os.getenv('POLYGON_API_KEY'):
+        print(f"No Polygon API key available for getting unusual options activity")
+        return []
+        
     try:
-        stock = yf.Ticker(ticker)
+        # Use polygon integration to get unusual activity
+        unusual_activity_data = polygon.get_unusual_options_activity(ticker)
         
-        # Get all available expiration dates
-        expirations = stock.options
-        
-        if not expirations:
-            return []
-        
-        unusual_activity = []
-        
-        # Process recent expirations (limit to 3 to avoid too many API calls)
-        for expiry in expirations[:3]:
-            # Get option chains
-            options = stock.option_chain(expiry)
-            calls = options.calls
-            puts = options.puts
+        # If we got data from polygon, return it
+        if unusual_activity_data:
+            print(f"Retrieved unusual activity data from Polygon for {ticker}")
+            return unusual_activity_data
             
-            # Check for unusual volume in calls
-            if not calls.empty:
-                # Calculate volume to open interest ratio
-                calls['volume_oi_ratio'] = calls['volume'] / calls['openInterest'].replace(0, 1)
-                
-                # Filter for unusual activity
-                unusual_calls = calls[
-                    (calls['volume'] > 100) &  # Minimum volume
-                    (calls['volume_oi_ratio'] > 2)  # Volume is more than 2x open interest
-                ].copy()
-                
-                if not unusual_calls.empty:
-                    unusual_calls['sentiment'] = 'bullish'
-                    unusual_calls['amount'] = unusual_calls['volume'] * unusual_calls['lastPrice'] * 100  # Contract size
-                    
-                    # Sort by amount (descending)
-                    unusual_calls = unusual_calls.sort_values('amount', ascending=False)
-                    
-                    # Take top 2 unusual call activities
-                    for _, row in unusual_calls.head(2).iterrows():
-                        # Create activity entry
-                        activity_entry = {
-                            'expiry': expiry,
-                            'strike': row['strike'],
-                            'volume': row['volume'],
-                            'open_interest': row['openInterest'],
-                            'amount': row['amount'],
-                            'volume_oi_ratio': row['volume_oi_ratio'],
-                            'sentiment': 'bullish'
-                        }
-                        
-                        # Try to get real transaction date from Polygon.io
-                        try:
-                            # Format the option symbol for Polygon
-                            strike_price_padded = f"{row['strike']:08.0f}"
-                            option_date = datetime.datetime.strptime(expiry, '%Y-%m-%d')
-                            option_date_str = option_date.strftime('%y%m%d')
-                            option_symbol = f"O:{ticker}{option_date_str}C{strike_price_padded}"
-                            
-                            # Get trade data
-                            trade_info = get_option_trade_data(option_symbol)
-                            if trade_info and 'date' in trade_info:
-                                activity_entry['transaction_date'] = trade_info['date']
-                        except Exception as e:
-                            print(f"Error getting trade date for {ticker} call option: {str(e)}")
-                            
-                        unusual_activity.append(activity_entry)
-            
-            # Check for unusual volume in puts
-            if not puts.empty:
-                # Calculate volume to open interest ratio
-                puts['volume_oi_ratio'] = puts['volume'] / puts['openInterest'].replace(0, 1)
-                
-                # Filter for unusual activity
-                unusual_puts = puts[
-                    (puts['volume'] > 100) &  # Minimum volume
-                    (puts['volume_oi_ratio'] > 2)  # Volume is more than 2x open interest
-                ].copy()
-                
-                if not unusual_puts.empty:
-                    unusual_puts['sentiment'] = 'bearish'
-                    unusual_puts['amount'] = unusual_puts['volume'] * unusual_puts['lastPrice'] * 100  # Contract size
-                    
-                    # Sort by amount (descending)
-                    unusual_puts = unusual_puts.sort_values('amount', ascending=False)
-                    
-                    # Take top 2 unusual put activities
-                    for _, row in unusual_puts.head(2).iterrows():
-                        # Create activity entry
-                        activity_entry = {
-                            'expiry': expiry,
-                            'strike': row['strike'],
-                            'volume': row['volume'],
-                            'open_interest': row['openInterest'],
-                            'amount': row['amount'],
-                            'volume_oi_ratio': row['volume_oi_ratio'],
-                            'sentiment': 'bearish'
-                        }
-                        
-                        # Try to get real transaction date from Polygon.io
-                        try:
-                            # Format the option symbol for Polygon
-                            strike_price_padded = f"{row['strike']:08.0f}"
-                            option_date = datetime.datetime.strptime(expiry, '%Y-%m-%d')
-                            option_date_str = option_date.strftime('%y%m%d')
-                            option_symbol = f"O:{ticker}{option_date_str}P{strike_price_padded}"
-                            
-                            # Get trade data
-                            trade_info = get_option_trade_data(option_symbol)
-                            if trade_info and 'date' in trade_info:
-                                activity_entry['transaction_date'] = trade_info['date']
-                        except Exception as e:
-                            print(f"Error getting trade date for {ticker} put option: {str(e)}")
-                            
-                        unusual_activity.append(activity_entry)
+        # If polygon returned empty data, return empty list
+        return []
         
-        # If no unusual activity is found, check for highest volume options as an alternative
-        if not unusual_activity:
-            # Get the most active options
-            for expiry in expirations[:2]:
-                options = stock.option_chain(expiry)
-                calls = options.calls
-                puts = options.puts
-                
-                # Check calls
-                if not calls.empty:
-                    # Sort by volume (descending)
-                    high_volume_calls = calls.sort_values('volume', ascending=False)
-                    
-                    # Take top high volume call
-                    if high_volume_calls.iloc[0]['volume'] > 50:
-                        row = high_volume_calls.iloc[0]
-                        # Calculate volume to open interest ratio
-                        volume_oi_ratio = row['volume'] / row['openInterest'] if row['openInterest'] > 0 else 1.0
-                        # Create activity entry
-                        activity_entry = {
-                            'expiry': expiry,
-                            'strike': row['strike'],
-                            'volume': row['volume'],
-                            'open_interest': row['openInterest'],
-                            'amount': row['volume'] * row['lastPrice'] * 100,
-                            'volume_oi_ratio': volume_oi_ratio,
-                            'sentiment': 'bullish'
-                        }
-                        
-                        # Try to get real transaction date from Polygon.io
-                        try:
-                            # Format the option symbol for Polygon
-                            strike_price_padded = f"{row['strike']:08.0f}"
-                            option_date = datetime.datetime.strptime(expiry, '%Y-%m-%d')
-                            option_date_str = option_date.strftime('%y%m%d')
-                            option_symbol = f"O:{ticker}{option_date_str}C{strike_price_padded}"
-                            
-                            # Get trade data
-                            trade_info = get_option_trade_data(option_symbol)
-                            if trade_info and 'date' in trade_info:
-                                activity_entry['transaction_date'] = trade_info['date']
-                        except Exception as e:
-                            print(f"Error getting trade date for high volume {ticker} call option: {str(e)}")
-                            
-                        unusual_activity.append(activity_entry)
-                
-                # Check puts
-                if not puts.empty:
-                    # Sort by volume (descending)
-                    high_volume_puts = puts.sort_values('volume', ascending=False)
-                    
-                    # Take top high volume put
-                    if high_volume_puts.iloc[0]['volume'] > 50:
-                        row = high_volume_puts.iloc[0]
-                        # Calculate volume to open interest ratio
-                        volume_oi_ratio = row['volume'] / row['openInterest'] if row['openInterest'] > 0 else 1.0
-                        # Create activity entry
-                        activity_entry = {
-                            'expiry': expiry,
-                            'strike': row['strike'],
-                            'volume': row['volume'],
-                            'open_interest': row['openInterest'],
-                            'amount': row['volume'] * row['lastPrice'] * 100,
-                            'volume_oi_ratio': volume_oi_ratio,
-                            'sentiment': 'bearish'
-                        }
-                        
-                        # Try to get real transaction date from Polygon.io
-                        try:
-                            # Format the option symbol for Polygon
-                            strike_price_padded = f"{row['strike']:08.0f}"
-                            option_date = datetime.datetime.strptime(expiry, '%Y-%m-%d')
-                            option_date_str = option_date.strftime('%y%m%d')
-                            option_symbol = f"O:{ticker}{option_date_str}P{strike_price_padded}"
-                            
-                            # Get trade data
-                            trade_info = get_option_trade_data(option_symbol)
-                            if trade_info and 'date' in trade_info:
-                                activity_entry['transaction_date'] = trade_info['date']
-                        except Exception as e:
-                            print(f"Error getting trade date for high volume {ticker} put option: {str(e)}")
-                            
-                        unusual_activity.append(activity_entry)
-        
-        return unusual_activity
     except Exception as e:
-        print(f"Error fetching unusual options activity: {str(e)}")
+        print(f"Error fetching unusual options activity from Polygon: {str(e)}")
         return []
 
 def get_simplified_unusual_activity_summary(ticker):
@@ -303,89 +121,20 @@ def get_simplified_unusual_activity_summary(ticker):
     Returns:
         A string with a conversational summary of unusual options activity
     """
-    # First try using Polygon.io API if available
+    # Only use Polygon.io API as requested
     if os.getenv('POLYGON_API_KEY'):
         try:
             polygon_summary = polygon.get_simplified_unusual_activity_summary(ticker)
             if polygon_summary and len(polygon_summary) > 20:  # Check for a valid response
                 print(f"Using Polygon.io data for unusual activity summary for {ticker}")
                 return polygon_summary
+            else:
+                return f"📊 No significant unusual options activity detected for {ticker} in Polygon.io data.\n\nThis could indicate normal trading patterns or low options volume."
         except Exception as e:
             print(f"Error with Polygon unusual activity summary: {str(e)}")
-    
-    # Fall back to Yahoo Finance implementation
-    try:
-        stock = yf.Ticker(ticker)
-        ticker_data = stock.history(period="1d")
-        current_price = ticker_data['Close'].iloc[-1] if not ticker_data.empty else 0
-        
-        # Get unusual options activity
-        unusual_activity = get_unusual_options_activity(ticker)
-        
-        if not unusual_activity:
-            return f"📊 No significant unusual options activity detected for {ticker}.\n\nThis could indicate normal trading patterns or low options volume."
-        
-        # Get stock info
-        info = stock.info
-        company_name = info.get('shortName', ticker)
-        
-        # Separate bullish and bearish activity
-        bullish_activity = [a for a in unusual_activity if a['sentiment'] == 'bullish']
-        bearish_activity = [a for a in unusual_activity if a['sentiment'] == 'bearish']
-        
-        # Find the biggest money flow
-        all_activity = sorted(unusual_activity, key=lambda x: x['amount'], reverse=True)
-        biggest_bet = all_activity[0] if all_activity else None
-        
-        # Determine overall sentiment
-        bullish_amount = sum(a['amount'] for a in bullish_activity)
-        bearish_amount = sum(a['amount'] for a in bearish_activity)
-        
-        overall_sentiment = ""
-        if bullish_amount > bearish_amount * 1.5:
-            overall_sentiment = "BULLISH"
-        elif bullish_amount > bearish_amount:
-            overall_sentiment = "MILDLY BULLISH"
-        elif bearish_amount > bullish_amount * 1.5:
-            overall_sentiment = "BEARISH"
-        elif bearish_amount > bullish_amount:
-            overall_sentiment = "MILDLY BEARISH"
-        else:
-            overall_sentiment = "NEUTRAL"
-        
-        # Create a response with whale emojis in title
-        response = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment} BIAS 🐳\n\n"
-        
-        # Format details for each activity (limit to top 5)
-        for i, item in enumerate(all_activity[:5]):
-            contract = f"{ticker} {item['strike']} {item['expiry']} {'Call' if item['sentiment'] == 'bullish' else 'Put'}"
-            volume = item.get('volume', 0)
-            sentiment = item.get('sentiment', 'neutral')
-            
-            # Add emojis based on sentiment
-            emoji = "🟢" if "bullish" in sentiment else "🔴" if "bearish" in sentiment else "⚪"
-            
-            response += f"{emoji} {contract}:\n"
-            
-            # If we have a transaction date (from Polygon real trade data), include it
-            if 'transaction_date' in item:
-                response += f"   {volume} contracts on {item['transaction_date']} (${item['amount']:,.0f} premium)\n"
-            else:
-                response += f"   {volume} contracts (${item['amount']:,.0f} premium)\n"
-        
-        # Add explanation based on sentiment
-        if "BULLISH" in overall_sentiment:
-            response += "\nLarge traders are showing bullish sentiment with significant call buying."
-        elif "BEARISH" in overall_sentiment:
-            response += "\nLarge traders are showing bearish sentiment with significant put buying."
-        else:
-            response += "\nMixed sentiment with balanced call and put activity."
-            
-        return response
-        
-    except Exception as e:
-        print(f"Error generating simplified unusual activity summary: {str(e)}")
-        return f"📊 Unable to analyze unusual options activity for {ticker} due to an error."
+            return f"📊 Unable to retrieve unusual options activity for {ticker} from Polygon.io.\n\nError: {str(e)}"
+    else:
+        return f"📊 Polygon.io API key is not available. Please provide a valid API key to view unusual options activity."
 
 def detect_unusual_options_flow(options_data):
     """
