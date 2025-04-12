@@ -434,33 +434,14 @@ def get_current_price(ticker):
         if result:
             return result.get('p')  # 'p' is the price field
         
-        # If Polygon returns empty result, try Yahoo
-        print(f"Polygon returned empty result for {ticker}, trying Yahoo Finance")
-        try:
-            import yfinance as yf
-            stock = yf.Ticker(ticker)
-            price = stock.info.get('regularMarketPrice')
-            if price:
-                return price
-        except Exception as yf_error:
-            print(f"Yahoo Finance fallback also failed: {str(yf_error)}")
-            
+        # If Polygon returns empty result, return None
+        print(f"Polygon returned empty result for {ticker}")
+        print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
         return None
         
     except Exception as e:
         print(f"Error fetching current price for {ticker}: {str(e)}")
-        
-        # Always fall back to Yahoo Finance for any exception
-        try:
-            import yfinance as yf
-            print(f"Exception fallback to Yahoo Finance for {ticker} price data")
-            stock = yf.Ticker(ticker)
-            price = stock.info.get('regularMarketPrice')
-            if price:
-                return price
-        except Exception as yf_error:
-            print(f"Yahoo Finance fallback also failed: {str(yf_error)}")
-            
+        print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
         return None
 
 def get_option_chain(ticker, expiration_date=None):
@@ -499,86 +480,11 @@ def get_option_chain(ticker, expiration_date=None):
         # Use throttled API call
         response = throttled_api_call(endpoint, headers=get_headers())
             
-        # If response indicates fallback or error, try Yahoo Finance
+        # If response indicates an error, return None (no fallback)
         if not response or response.status_code in [403, 429, 503]:
-            print(f"Using Yahoo Finance fallback for {ticker} option chain")
-            try:
-                import yfinance as yf
-                import pandas as pd
-                
-                stock = yf.Ticker(ticker)
-                
-                # If we need specific expiration
-                if expiration_date:
-                    try:
-                        options = stock.option_chain(expiration_date)
-                        # Convert Yahoo format to Polygon format
-                        results = []
-                        
-                        # Process calls
-                        for _, row in options.calls.iterrows():
-                            results.append({
-                                'ticker': f"{ticker}{expiration_date.replace('-', '')}C{int(row['strike']*1000)}",
-                                'underlying_ticker': ticker,
-                                'expiration_date': expiration_date,
-                                'strike_price': float(row['strike']),
-                                'contract_type': 'call',
-                                'last_price': float(row['lastPrice']),
-                                'volume': int(row['volume']),
-                                'open_interest': int(row['openInterest'])
-                            })
-                        
-                        # Process puts
-                        for _, row in options.puts.iterrows():
-                            results.append({
-                                'ticker': f"{ticker}{expiration_date.replace('-', '')}P{int(row['strike']*1000)}",
-                                'underlying_ticker': ticker,
-                                'expiration_date': expiration_date,
-                                'strike_price': float(row['strike']),
-                                'contract_type': 'put',
-                                'last_price': float(row['lastPrice']),
-                                'volume': int(row['volume']),
-                                'open_interest': int(row['openInterest'])
-                            })
-                        
-                        # Cache the results
-                        option_chain_cache[cache_key] = results
-                        
-                        return results
-                    except Exception as e:
-                        print(f"Error getting Yahoo chain for specific expiration: {str(e)}")
-                else:
-                    # If we just need available expirations
-                    expirations = stock.options
-                    if expirations:
-                        # Get the first expiration's chain as an example
-                        try:
-                            options = stock.option_chain(expirations[0])
-                            results = []
-                            
-                            # Process just a sample set to return format
-                            for exp_date in expirations:
-                                sample_call = {
-                                    'ticker': f"{ticker}{exp_date.replace('-', '')}C00000",
-                                    'underlying_ticker': ticker,
-                                    'expiration_date': exp_date,
-                                    'contract_type': 'call'
-                                }
-                                sample_put = {
-                                    'ticker': f"{ticker}{exp_date.replace('-', '')}P00000",
-                                    'underlying_ticker': ticker,
-                                    'expiration_date': exp_date,
-                                    'contract_type': 'put'
-                                }
-                                results.append(sample_call)
-                                results.append(sample_put)
-                            
-                            return results
-                        except:
-                            pass
-            except Exception as yf_error:
-                print(f"Yahoo Finance options fallback also failed: {str(yf_error)}")
-            return None  # Return None if both Polygon and Yahoo fail
+            print(f"Error fetching option chain for {ticker}: {response.status_code if response else 'No response'}")
+            print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
+            return None
         
         # Process successful Polygon response
         if response.status_code != 200:
@@ -596,58 +502,8 @@ def get_option_chain(ticker, expiration_date=None):
         
     except Exception as e:
         print(f"Error fetching option chain for {ticker}: {str(e)}")
-        
-        # Try Yahoo Finance as a fallback for any exception
-        try:
-            import yfinance as yf
-            import pandas as pd
-            print(f"Exception fallback to Yahoo Finance for {ticker} option chain")
-            
-            stock = yf.Ticker(ticker)
-            
-            if expiration_date:
-                try:
-                    options = stock.option_chain(expiration_date)
-                    results = []
-                    
-                    # Process calls
-                    for _, row in options.calls.iterrows():
-                        results.append({
-                            'ticker': f"{ticker}{expiration_date.replace('-', '')}C{int(row['strike']*1000)}",
-                            'underlying_ticker': ticker,
-                            'expiration_date': expiration_date,
-                            'strike_price': float(row['strike']),
-                            'contract_type': 'call',
-                            'last_price': float(row['lastPrice']),
-                            'volume': int(row['volume']),
-                            'open_interest': int(row['openInterest'])
-                        })
-                    
-                    # Process puts
-                    for _, row in options.puts.iterrows():
-                        results.append({
-                            'ticker': f"{ticker}{expiration_date.replace('-', '')}P{int(row['strike']*1000)}",
-                            'underlying_ticker': ticker,
-                            'expiration_date': expiration_date,
-                            'strike_price': float(row['strike']),
-                            'contract_type': 'put',
-                            'last_price': float(row['lastPrice']),
-                            'volume': int(row['volume']),
-                            'open_interest': int(row['openInterest'])
-                        })
-                    
-                    # Cache the results
-                    cache_key = f"{ticker}_{expiration_date}"
-                    option_chain_cache[cache_key] = results
-                    
-                    return results
-                except:
-                    pass
-            
-            return None
-        except Exception as yf_error:
-            print(f"Yahoo Finance option chain fallback also failed: {str(yf_error)}")
-            return None
+        print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
+        return None
 
 def get_option_expirations(ticker):
     """
@@ -714,24 +570,8 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         chain = get_option_chain(ticker, expiration_date)
         
         if not chain:
-            # Try Yahoo Finance as fallback
-            try:
-                import yfinance as yf
-                print(f"Fallback to Yahoo Finance for {ticker} options chain")
-                stock = yf.Ticker(ticker)
-                options = stock.option_chain(expiration_date)
-                
-                if option_type == 'call':
-                    chain_df = options.calls
-                else:
-                    chain_df = options.puts
-                
-                # Find closest strike
-                closest_strike = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
-                if not closest_strike.empty:
-                    return closest_strike['lastPrice'].values[0]
-            except Exception as yf_error:
-                print(f"Yahoo Finance options fallback failed: {str(yf_error)}")
+            print(f"No option chain found for {ticker} at {expiration_date}")
+            print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
             return None
         
         # Find the matching option
@@ -744,24 +584,7 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
         if not option_symbol:
             print(f"Option not found: {ticker} {expiration_date} {strike_price} {option_type}")
-            # Try Yahoo Finance as fallback for strike not found
-            try:
-                import yfinance as yf
-                print(f"Fallback to Yahoo Finance for strike not found: {ticker} {strike_price} {option_type}")
-                stock = yf.Ticker(ticker)
-                options = stock.option_chain(expiration_date)
-                
-                if option_type == 'call':
-                    chain_df = options.calls
-                else:
-                    chain_df = options.puts
-                
-                # Find closest strike
-                closest_strike = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
-                if not closest_strike.empty:
-                    return closest_strike['lastPrice'].values[0]
-            except Exception as yf_error:
-                print(f"Yahoo Finance options fallback failed: {str(yf_error)}")
+            print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
             return None
         
         # Now get the latest price for this option
@@ -770,25 +593,7 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
         if response.status_code != 200:
             print(f"Error fetching option price: {response.status_code}")
-            # If forbidden error (403), fallback to Yahoo Finance
-            if response.status_code == 403:
-                try:
-                    import yfinance as yf
-                    print(f"Fallback to Yahoo Finance for {ticker} {strike_price} {option_type} option price")
-                    stock = yf.Ticker(ticker)
-                    options = stock.option_chain(expiration_date)
-                    
-                    if option_type == 'call':
-                        chain_df = options.calls
-                    else:
-                        chain_df = options.puts
-                    
-                    # Find closest strike
-                    closest_match = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
-                    if not closest_match.empty:
-                        return closest_match['lastPrice'].values[0]
-                except Exception as yf_error:
-                    print(f"Yahoo Finance option price fallback failed: {str(yf_error)}")
+            print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
             return None
         
         data = response.json()
@@ -801,26 +606,7 @@ def get_option_price(ticker, option_type, strike_price, expiration_date):
         
     except Exception as e:
         print(f"Error fetching option price: {str(e)}")
-        
-        # Try Yahoo Finance as a final fallback
-        try:
-            import yfinance as yf
-            print(f"Exception fallback to Yahoo Finance for {ticker} {strike_price} {option_type}")
-            stock = yf.Ticker(ticker)
-            options = stock.option_chain(expiration_date)
-            
-            if option_type == 'call':
-                chain_df = options.calls
-            else:
-                chain_df = options.puts
-            
-            # Find closest strike
-            closest_match = chain_df.iloc[(chain_df['strike'] - float(strike_price)).abs().argsort()[:1]]
-            if not closest_match.empty:
-                return closest_match['lastPrice'].values[0]
-        except Exception as yf_error:
-            print(f"Yahoo Finance final fallback also failed: {str(yf_error)}")
-            
+        print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
         return None
 
 def get_unusual_options_activity(ticker):
@@ -844,86 +630,8 @@ def get_unusual_options_activity(ticker):
         chain = get_option_chain(ticker)
         
         if not chain:
-            # Try to use yfinance for basic options activity
-            try:
-                import yfinance as yf
-                import pandas as pd
-                import numpy as np
-                
-                print(f"Fallback to Yahoo Finance for {ticker} unusual options activity")
-                stock = yf.Ticker(ticker)
-                
-                # Get options expirations
-                expirations = stock.options
-                
-                if not expirations or len(expirations) == 0:
-                    return None
-                
-                # Use the closest expiration date
-                exp_date = expirations[0]
-                
-                # Get option chain
-                options = stock.option_chain(exp_date)
-                
-                # Process calls and puts
-                calls_df = options.calls
-                puts_df = options.puts
-                
-                # Combine unusual activity for both
-                unusual_activity = []
-                
-                # For calls - find options with high volume relative to open interest
-                if not calls_df.empty:
-                    # Calculate volume to open interest ratio
-                    calls_df['vol_oi_ratio'] = calls_df['volume'] / calls_df['openInterest'].replace(0, 1)
-                    
-                    # Sort by volume and take top options
-                    top_calls = calls_df.sort_values('volume', ascending=False).head(3)
-                    
-                    # Add to unusual activity list
-                    for _, row in top_calls.iterrows():
-                        if row['volume'] > 20:  # Only include significant volume
-                            premium = row['volume'] * row['lastPrice'] * 100  # Each contract is 100 shares
-                            
-                            if premium > 10000:  # Only include if premium is significant
-                                unusual_activity.append({
-                                    'contract': f"{ticker} {row['strike']} {exp_date} CALL",
-                                    'volume': int(row['volume']),
-                                    'avg_price': float(row['lastPrice']),
-                                    'premium': premium,
-                                    'sentiment': 'bullish'
-                                })
-                
-                # For puts - similar analysis
-                if not puts_df.empty:
-                    # Calculate volume to open interest ratio
-                    puts_df['vol_oi_ratio'] = puts_df['volume'] / puts_df['openInterest'].replace(0, 1)
-                    
-                    # Sort by volume and take top options
-                    top_puts = puts_df.sort_values('volume', ascending=False).head(3)
-                    
-                    # Add to unusual activity list
-                    for _, row in top_puts.iterrows():
-                        if row['volume'] > 20:  # Only include significant volume
-                            premium = row['volume'] * row['lastPrice'] * 100
-                            
-                            if premium > 10000:  # Only include if premium is significant
-                                unusual_activity.append({
-                                    'contract': f"{ticker} {row['strike']} {exp_date} PUT",
-                                    'volume': int(row['volume']),
-                                    'avg_price': float(row['lastPrice']),
-                                    'premium': premium,
-                                    'sentiment': 'bearish'
-                                })
-                
-                # Sort by premium in descending order and return top 5
-                if unusual_activity:
-                    unusual_activity.sort(key=lambda x: x['premium'], reverse=True)
-                    return unusual_activity[:5]
-                    
-            except Exception as yf_error:
-                print(f"Yahoo Finance unusual activity fallback failed: {str(yf_error)}")
-            
+            print(f"No option chain found for {ticker}")
+            print(f"No fallback to Yahoo Finance - using only Polygon.io data as requested")
             return None
         
         # Get current stock price for context
