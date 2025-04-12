@@ -789,31 +789,33 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Create the summary with whale emojis
-    summary = f"🐳 {ticker} Unusual Options Activity: {overall_sentiment.upper()} BIAS 🐳\n\n"
+    # Calculate percentages for the overall flow display
+    total_volume = bullish_count + bearish_count
+    bullish_pct = round((bullish_count / total_volume) * 100) if total_volume > 0 else 0
+    bearish_pct = round((bearish_count / total_volume) * 100) if total_volume > 0 else 0
     
-    for i, item in enumerate(activity):
-        contract = item.get('contract', '')
-        volume = item.get('volume', 0)
-        premium = item.get('premium', 0)
-        sentiment = item.get('sentiment', 'neutral')
-        
-        emoji = "🟢" if sentiment == 'bullish' else "🔴" if sentiment == 'bearish' else "⚪"
-        
-        summary += f"{emoji} {contract}:\n"
-        
-        # If we have a transaction date, include it
-        if 'transaction_date' in item:
-            summary += f"   {volume} contracts on {item['transaction_date']} (${premium:,.0f} premium)\n"
-        else:
-            summary += f"   {volume} contracts (${premium:,.0f} premium)\n"
+    # Format total premium
+    total_premium = sum(item.get('premium', 0) for item in activity)
+    premium_in_millions = total_premium / 1000000
     
-    # Add overall analysis
+    # Create the summary with whale emojis in clean, bulleted format
+    summary = f"🐳 {ticker} Unusual Options Activity 🐳\n\n"
+    
+    # Add bullish or bearish summary statement
     if overall_sentiment == "bullish":
-        summary += "\nLarge traders are showing bullish sentiment with significant call buying."
+        summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+        main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
+        summary += f"bet with {main_contract.get('contract', '').split()[1]}-the-money (${main_contract.get('contract', '').split()[0]}) options expiring on {main_contract.get('contract', '').split()[1]}.\n\n"
+        summary += f"• Institutional Investors are heavily favoring call options with volume {round(bullish_count/bearish_count, 1)}x the put\nopen interest.\n\n"
     elif overall_sentiment == "bearish":
-        summary += "\nLarge traders are showing bearish sentiment with significant put buying."
+        summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+        main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
+        summary += f"bet with {main_contract.get('contract', '').split()[1]}-the-money (${main_contract.get('contract', '').split()[0]}) options expiring on {main_contract.get('contract', '').split()[1]}.\n\n"
+        summary += f"• Institutional Investors are heavily favoring put options with volume {round(bearish_count/bullish_count, 1)}x the call\nopen interest.\n\n"
     else:
-        summary += "\nMixed sentiment with balanced call and put activity."
+        summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
+    
+    # Add overall flow percentages
+    summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
     
     return summary
