@@ -18,8 +18,8 @@ def run_streamlit_admin():
 
 if __name__ == "__main__":
     # Check if Discord token is set
-    if not os.getenv("DISCORD_TOKEN"):
-        print("Error: DISCORD_TOKEN environment variable is not set.")
+    if not os.getenv("DISCORD_TOKEN_2"):
+        print("Error: DISCORD_TOKEN_2 environment variable is not set.")
         print("Please set it in the .env file or in the Replit Secrets tab.")
         exit(1)
     
