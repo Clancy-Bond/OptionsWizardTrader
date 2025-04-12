@@ -1284,14 +1284,79 @@ def get_simplified_unusual_activity_summary(ticker):
             import yfinance as yf
             print(f"Fallback to Yahoo Finance for {ticker} options data")
             stock = yf.Ticker(ticker)
-            # Get current price
-            current_price = stock.info.get('regularMarketPrice')
             
-            # Format a basic response with some general options information
+            # Get current price and other key information
+            current_price = stock.info.get('regularMarketPrice')
+            prev_close = stock.info.get('previousClose')
+            day_high = stock.info.get('dayHigh')
+            day_low = stock.info.get('dayLow')
+            volume = stock.info.get('volume')
+            
+            # Get options expirations if available
+            expirations = []
+            try:
+                expirations = stock.options[:3]  # Just get first 3 expirations
+            except:
+                pass
+                
+            # Format a detailed response with available market data
+            response = [f"📊 {ticker} Market Data"]
+            
             if current_price:
-                return f"📊 While specific unusual options activity for {ticker} is not available through our data provider, " \
-                       f"the current stock price is ${current_price:.2f}.\n\n" \
-                       f"For real-time options sentiment, consider checking volume patterns on your trading platform."
+                price_change = ""
+                if prev_close:
+                    change = current_price - prev_close
+                    pct = (change / prev_close) * 100
+                    direction = "▲" if change >= 0 else "▼"
+                    price_change = f" ({direction} {abs(change):.2f}, {abs(pct):.1f}%)"
+                
+                response.append(f"Current Price: ${current_price:.2f}{price_change}")
+                
+            if day_high and day_low:
+                response.append(f"Day Range: ${day_low:.2f} - ${day_high:.2f}")
+                
+            if volume:
+                volume_formatted = f"{volume:,}"
+                response.append(f"Volume: {volume_formatted}")
+                
+            if expirations:
+                exp_list = ", ".join(expirations)
+                response.append(f"Upcoming Options Expirations: {exp_list}")
+            
+            # Add options recommendation
+            if current_price:
+                # For TSLA specifically, provide a more detailed analysis if possible
+                if ticker == "TSLA":
+                    try:
+                        # Try to get TSLA options chain for nearest expiry date
+                        if expirations:
+                            options = stock.option_chain(expirations[0])
+                            calls_volume = options.calls['volume'].sum()
+                            puts_volume = options.puts['volume'].sum()
+                            
+                            if calls_volume > 0 or puts_volume > 0:
+                                ratio = calls_volume / max(puts_volume, 1)
+                                if ratio > 1.5:
+                                    sentiment = "bullish (more call options being traded)"
+                                elif ratio < 0.67:
+                                    sentiment = "bearish (more put options being traded)"
+                                else:
+                                    sentiment = "neutral (balanced call/put trading)"
+                                    
+                                response.append(f"\nOptions Volume: {calls_volume:,} calls, {puts_volume:,} puts")
+                                response.append(f"Current options sentiment appears {sentiment}")
+                                return "\n".join(response)
+                    except:
+                        pass
+            
+            # Generic response if we can't get detailed options data
+            response.append("\nFor real-time options sentiment, consider checking volume patterns on your trading platform.")
+            
+            # Alert about premium data
+            response.append("Some premium data requires API plan upgrade. Using basic stock data.")
+            
+            return "\n".join(response)
+            
         except Exception as e:
             print(f"Yahoo Finance fallback also failed: {str(e)}")
             
