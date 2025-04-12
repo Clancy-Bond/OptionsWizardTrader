@@ -997,28 +997,66 @@ def get_simplified_unusual_activity_summary(ticker):
                     else:
                         main_trade = top_activity
                         
-                    # Add transaction time for the specific main trade being discussed
+                    # Store the timestamp for use in the main trade description
+                    timestamp_str = ""
                     if 'timestamp_human' in main_trade:
-                        summary += f"• Largest {main_trade.get('sentiment', '')} trade occurred at: {main_trade['timestamp_human']}\n"
+                        timestamp_str = main_trade['timestamp_human']
                     elif 'transaction_date' in main_trade:
-                        summary += f"• Largest {main_trade.get('sentiment', '')} trade occurred on: {main_trade['transaction_date']}\n"
+                        timestamp_str = main_trade['transaction_date']
                         
                     summary += "\n"
     
     # Add bullish or bearish summary statement
     if overall_sentiment == "bullish":
-        summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
-        
-        # Safely get the main contract
+        # Get properly formatted expiration date
+        expiry_date = ""
         try:
             main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
-            if len(contract_parts) >= 2:
-                summary += f"bet with {contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {contract_parts[1]}.\n\n"
+            
+            # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
+            if 'symbol' in main_contract:
+                symbol = main_contract['symbol']
+                if symbol.startswith('O:'):
+                    # Parse expiration from symbol format (O:TSLA250417...)
+                    ticker_part = symbol.split(':')[1]
+                    date_start = len(ticker_part.split()[0])
+                    if len(ticker_part) > date_start + 6:  # Make sure there's enough characters
+                        year = '20' + ticker_part[date_start:date_start+2]
+                        month = ticker_part[date_start+2:date_start+4]
+                        day = ticker_part[date_start+4:date_start+6]
+                        expiry_date = f"{month}/{day}/{year[-2:]}"
+            
+            # Fallback to contract parts if symbol parsing failed
+            if not expiry_date and len(contract_parts) >= 3:
+                expiry_date = contract_parts[2]
+                
+            # Start the summary with integrated timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish bet\n"
+                summary += f"occurred at {timestamp_str} with "
             else:
-                summary += f"bet with options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+                summary += f"bet with "
+                
+            # Add strike price and expiration
+            if len(contract_parts) >= 3:
+                # If we have a properly parsed expiration date
+                if expiry_date:
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {expiry_date}.\n\n"
+                else:
+                    # Fallback to just the second part if we couldn't parse a proper date
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring soon.\n\n"
+            else:
+                summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
-            summary += f"bet with options from the largest unusual activity.\n\n"
+            # If we couldn't parse the contract but have a timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish bet\n"
+                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
+            else:
+                summary += f"• I'm seeing bullish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+                summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
         if bearish_count > 0:
@@ -1027,18 +1065,55 @@ def get_simplified_unusual_activity_summary(ticker):
             summary += f"• Institutional Investors are heavily favoring call options with dominant call volume.\n\n"
             
     elif overall_sentiment == "bearish":
-        summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
-        
-        # Safely get the main contract
+        # Get properly formatted expiration date
+        expiry_date = ""
         try:
             main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
-            if len(contract_parts) >= 2:
-                summary += f"bet with {contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {contract_parts[1]}.\n\n"
+            
+            # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
+            if 'symbol' in main_contract:
+                symbol = main_contract['symbol']
+                if symbol.startswith('O:'):
+                    # Parse expiration from symbol format (O:TSLA250417...)
+                    ticker_part = symbol.split(':')[1]
+                    date_start = len(ticker_part.split()[0])
+                    if len(ticker_part) > date_start + 6:  # Make sure there's enough characters
+                        year = '20' + ticker_part[date_start:date_start+2]
+                        month = ticker_part[date_start+2:date_start+4]
+                        day = ticker_part[date_start+4:date_start+6]
+                        expiry_date = f"{month}/{day}/{year[-2:]}"
+            
+            # Fallback to contract parts if symbol parsing failed
+            if not expiry_date and len(contract_parts) >= 3:
+                expiry_date = contract_parts[2]
+                
+            # Start the summary with integrated timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish bet\n"
+                summary += f"occurred at {timestamp_str} with "
             else:
-                summary += f"bet with options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"bet with "
+                
+            # Add strike price and expiration
+            if len(contract_parts) >= 3:
+                # If we have a properly parsed expiration date
+                if expiry_date:
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring on {expiry_date}.\n\n"
+                else:
+                    # Fallback to just the second part if we couldn't parse a proper date
+                    summary += f"{contract_parts[1]}-the-money (${contract_parts[0]}) options expiring soon.\n\n"
+            else:
+                summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
-            summary += f"bet with options from the largest unusual activity.\n\n"
+            # If we couldn't parse the contract but have a timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish bet\n"
+                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
+            else:
+                summary += f"• I'm seeing bearish activity for {ticker}. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
         if bullish_count > 0:
