@@ -215,9 +215,9 @@ class OptionsBot(commands.Bot):
 
 # Run the bot
 if __name__ == "__main__":
-    token = os.getenv("DISCORD_TOKEN_2")
+    token = os.getenv("DISCORD_TOKEN") or os.getenv("DISCORD_TOKEN_2")
     if not token:
-        print("Error: DISCORD_TOKEN_2 environment variable is not set.")
+        print("Error: Neither DISCORD_TOKEN nor DISCORD_TOKEN_2 environment variable is set.")
         exit(1)
     
     bot = OptionsBot()
