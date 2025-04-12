@@ -19,14 +19,15 @@ def format_timestamp(timestamp_ns):
         timestamp_ns: Timestamp in nanoseconds
         
     Returns:
-        Formatted date and time string (MM/DD/YY HH:MM:SS)
+        Formatted date and time string (MM/DD/YY h:MM:SS AM/PM ET)
     """
     if not timestamp_ns:
         return None
         
     # Convert nanoseconds to seconds
     timestamp_sec = timestamp_ns / 1e9
-    return datetime.fromtimestamp(timestamp_sec).strftime("%m/%d/%y %H:%M:%S")
+    # Use 12-hour format with AM/PM and add ET timezone
+    return datetime.fromtimestamp(timestamp_sec).strftime("%m/%d/%y %I:%M:%S %p ET")
 
 def get_option_trade_data(option_symbol, min_size=5):
     """

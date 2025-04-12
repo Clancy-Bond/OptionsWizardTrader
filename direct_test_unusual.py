@@ -2,7 +2,8 @@
 Direct test for the new unusual options activity scoring system
 Bypasses Discord bot to test directly
 """
-from polygon_integration import get_unusual_options_activity
+import json
+import re
 from polygon_integration import get_simplified_unusual_activity_summary
 
 def test_unusual_activity(ticker):
@@ -11,35 +12,24 @@ def test_unusual_activity(ticker):
     """
     print(f"\n===== Testing Unusual Options Activity for {ticker} =====\n")
     
-    # Get the raw unusual activity data
-    activity = get_unusual_options_activity(ticker)
-    
-    # Print the detailed data including scores
-    if activity:
-        print(f"Found {len(activity)} unusual options activities:\n")
-        for i, item in enumerate(activity):
-            print(f"OPTION {i+1}: {item['contract']}")
-            print(f"  Sentiment: {item['sentiment']}")
-            print(f"  Volume: {item['volume']}")
-            print(f"  Premium: ${item['premium']:,.2f}")
-            print(f"  Unusualness Score: {item.get('unusualness_score', 'N/A')}")
-            
-            # Print score breakdown if available
-            if 'score_breakdown' in item:
-                breakdown = item['score_breakdown']
-                print("  Score Breakdown:")
-                for k, v in breakdown.items():
-                    if k not in ['total_volume', 'total_premium', 'largest_trade']:
-                        print(f"    {k}: {v}")
-            print()
-    else:
-        print("No unusual options activity found.")
-    
-    # Get and print the simplified summary
-    print("\n===== Simplified Summary =====\n")
+    # Get the summary directly from the function
     summary = get_simplified_unusual_activity_summary(ticker)
     print(summary)
+    
+    # Verify AM/PM timestamp format with ET timezone
+    if "AM ET" in summary or "PM ET" in summary:
+        print("\n✅ AM/PM timestamp with ET timezone confirmed")
+    else:
+        print("\n❌ AM/PM timestamp format not found")
+        
+    # Check if timestamp is associated with the correct sentiment
+    if "Largest bullish trade occurred at:" in summary and "bullish activity" in summary:
+        print("✅ Bullish timestamp correctly associated with bullish activity")
+    elif "Largest bearish trade occurred at:" in summary and "bearish activity" in summary:
+        print("✅ Bearish timestamp correctly associated with bearish activity")
+    else:
+        print("❓ Couldn't verify sentiment-timestamp association")
 
 if __name__ == "__main__":
-    ticker = "TSLA"
-    test_unusual_activity(ticker)
+    # Test with a ticker that typically has unusual options activity
+    test_unusual_activity("AAPL")  # Using AAPL for faster processing

@@ -989,11 +989,19 @@ def get_simplified_unusual_activity_summary(ticker):
                     unusual_factors_str = " and ".join(unusual_factors)
                     summary += f"• Unusual activity score: {unusualness_score}/100 (based on {unusual_factors_str})\n"
                     
-                    # Add transaction time if available in human-readable format
-                    if 'timestamp_human' in top_activity:
-                        summary += f"• Largest trade occurred at: {top_activity['timestamp_human']}\n"
-                    elif 'transaction_date' in top_activity:
-                        summary += f"• Largest trade occurred on: {top_activity['transaction_date']}\n"
+                    # Find specific trade information based on sentiment
+                    if overall_sentiment == "bullish":
+                        main_trade = next((item for item in activity if item.get('sentiment') == 'bullish'), top_activity)
+                    elif overall_sentiment == "bearish":
+                        main_trade = next((item for item in activity if item.get('sentiment') == 'bearish'), top_activity)
+                    else:
+                        main_trade = top_activity
+                        
+                    # Add transaction time for the specific main trade being discussed
+                    if 'timestamp_human' in main_trade:
+                        summary += f"• Largest {main_trade.get('sentiment', '')} trade occurred at: {main_trade['timestamp_human']}\n"
+                    elif 'transaction_date' in main_trade:
+                        summary += f"• Largest {main_trade.get('sentiment', '')} trade occurred on: {main_trade['transaction_date']}\n"
                         
                     summary += "\n"
     
