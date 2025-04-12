@@ -12,7 +12,7 @@ import option_calculator
 import unusual_activity
 import combined_scalp_stop_loss
 import calculate_dynamic_theta_decay
-from utils_file import is_valid_ticker, COMMON_WORDS
+from utils_file import is_valid_ticker, COMMON_WORDS, fetch_all_tickers, VALIDATED_TICKERS
 
 # Load environment variables
 load_dotenv()
@@ -39,8 +39,9 @@ class OptionsBotNLP:
     
     def __init__(self):
         # Regex patterns for extracting information from queries
-        # Specialized pattern for extracting tickers, improved to better handle context
-        self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Za-z]{1,5})(?!\w+\b)\b'
+        # Specialized pattern for extracting tickers, improved to handle any case and context
+        # This pattern will find potential tickers anywhere in the text, regardless of capitalization
+        self.ticker_pattern = r'(?:(?:ticker|symbol|stock|for|on|in|of|the)\s+)?(?:\$)?([A-Za-z]{1,5})(?!\w+\b)\b|(?:\$)([A-Za-z]{1,5})'
         
         # Using the extensive common words list imported from utils_file
         self.excluded_words = COMMON_WORDS
@@ -140,6 +141,11 @@ class OptionsBot(commands.Bot):
         """Called when the bot is ready"""
         print(f'Logged in as {self.user.name} ({self.user.id})')
         print('------')
+        
+        # Load all ticker symbols for improved recognition
+        print("Loading comprehensive ticker list...")
+        VALIDATED_TICKERS.update(fetch_all_tickers())
+        print(f"Loaded {len(VALIDATED_TICKERS)} total tickers for validation")
         
     async def on_message(self, message):
         """Handle incoming messages"""

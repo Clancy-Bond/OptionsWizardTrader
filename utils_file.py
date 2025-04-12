@@ -2,6 +2,7 @@ import re
 import os
 import json
 import yfinance as yf
+import pandas as pd
 from datetime import datetime, timedelta
 
 # List of common market indices and popular stocks to pre-validate
@@ -181,9 +182,61 @@ def parse_relative_date(date_text):
     
     return None
 
+def fetch_all_tickers():
+    """
+    Fetch a comprehensive list of all stock tickers from major exchanges.
+    This function will use Yahoo Finance to get lists of tickers from
+    NYSE, NASDAQ, and AMEX exchanges.
+    
+    Returns:
+        A set of valid ticker symbols
+    """
+    print("Fetching comprehensive ticker list from exchanges...")
+    all_tickers = set(COMMON_INDICES)  # Start with our predefined list
+    
+    try:
+        # Fetch tickers from major US exchanges using yfinance
+        exchanges = {
+            'NASDAQ': 'https://old.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=nasdaq&render=download',
+            'NYSE': 'https://old.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=nyse&render=download',
+            'AMEX': 'https://old.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=amex&render=download',
+        }
+        
+        for exchange_name, url in exchanges.items():
+            try:
+                df = pd.read_csv(url)
+                if 'Symbol' in df.columns:
+                    exchange_tickers = set(df['Symbol'].str.strip().str.upper())
+                    all_tickers.update(exchange_tickers)
+                    print(f"Added {len(exchange_tickers)} tickers from {exchange_name}")
+            except Exception as e:
+                print(f"Error fetching {exchange_name} tickers: {str(e)}")
+        
+        # Save the fetched tickers to a local file for backup
+        try:
+            with open('valid_tickers.json', 'w') as f:
+                json.dump(list(all_tickers), f)
+            print(f"Saved {len(all_tickers)} tickers to valid_tickers.json")
+        except Exception as e:
+            print(f"Error saving tickers to file: {str(e)}")
+            
+    except Exception as e:
+        print(f"Error during ticker fetching: {str(e)}")
+        # Try to load from local file if available
+        try:
+            if os.path.exists('valid_tickers.json'):
+                with open('valid_tickers.json', 'r') as f:
+                    all_tickers.update(json.load(f))
+                print(f"Loaded {len(all_tickers)} tickers from local backup file")
+        except Exception as backup_error:
+            print(f"Error loading backup ticker list: {str(backup_error)}")
+    
+    return all_tickers
+
 def is_valid_ticker(ticker):
     """
-    Check if a symbol is a valid stock ticker by checking with Yahoo Finance.
+    Check if a symbol is a valid stock ticker by checking against our cached list
+    or Yahoo Finance.
     
     Args:
         ticker: The symbol to check
