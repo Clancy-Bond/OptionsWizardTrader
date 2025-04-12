@@ -1343,8 +1343,7 @@ def get_simplified_unusual_activity_summary(ticker):
                                 'expiry': expiry_date,
                                 'premium': max_call_premium,
                                 'volume': int(max_call['volume']),
-                                'sentiment': 'bullish',
-                                'transaction_date': datetime.now().strftime("%m/%d/%y")
+                                'sentiment': 'bullish'
                             }
                     
                     if not options.puts.empty:
@@ -1359,8 +1358,7 @@ def get_simplified_unusual_activity_summary(ticker):
                                     'expiry': expiry_date,
                                     'premium': max_put_premium,
                                     'volume': int(max_put['volume']),
-                                    'sentiment': 'bearish',
-                                    'transaction_date': datetime.now().strftime("%m/%d/%y")
+                                    'sentiment': 'bearish'
                                 }
                     
                 # Format the response in the style of the unusual options activity report
