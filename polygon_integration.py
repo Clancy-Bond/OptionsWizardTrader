@@ -1044,10 +1044,10 @@ def get_simplified_unusual_activity_summary(ticker):
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${contract_parts[0]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"in-the-money ({contract_parts[0]}.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${contract_parts[0]}) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"in-the-money ({contract_parts[0]}.00) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
@@ -1104,10 +1104,10 @@ def get_simplified_unusual_activity_summary(ticker):
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${contract_parts[0]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"in-the-money ({contract_parts[0]}.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${contract_parts[0]}) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"in-the-money ({contract_parts[0]}.00) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
