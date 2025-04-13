@@ -42,23 +42,22 @@ async def test_discord_unusual():
     # Initialize the bot
     bot = OptionsBot()
     
-    # Create parsed result like NLP would produce
-    class MockParsed:
-        def __init__(self):
-            self.ticker = "TSLA"
-            self.option_type = None
-            self.expiration = None
-            self.strike = None
+    # Create parsed result like NLP would produce as a dictionary
+    parsed = {
+        'ticker': "TSLA",
+        'option_type': None,
+        'expiration': None,
+        'strike': None
+    }
         
     # Call the unusual activity handler directly
     message = MockMessage()
-    parsed = MockParsed()
     
     print("\nTesting unusual options activity for TSLA...")
     await bot.handle_unusual_activity_request(message, parsed)
     
     # Try another ticker
-    parsed.ticker = "AAPL"
+    parsed['ticker'] = "AAPL"
     print("\nTesting unusual options activity for AAPL...")
     await bot.handle_unusual_activity_request(message, parsed)
 
