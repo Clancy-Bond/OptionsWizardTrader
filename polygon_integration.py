@@ -1033,18 +1033,18 @@ def get_simplified_unusual_activity_summary(ticker):
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish**\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
                 # Timestamp is now shown at the end of the next line
             
             else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish**\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
 # Removed 'bet with' text
                 
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${contract_parts[0]}) options expiring on {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"in-the-money (${contract_parts[0]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
                     summary += f"in-the-money (${contract_parts[0]}) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
@@ -1053,11 +1053,11 @@ def get_simplified_unusual_activity_summary(ticker):
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish**\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
                 # Removed 'occurred at' timestamp
                 summary += f"with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish**\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
 # Removed 'bet with' text
                 summary += f"options from the largest unusual activity.\n\n"
         
@@ -1093,18 +1093,18 @@ def get_simplified_unusual_activity_summary(ticker):
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish**\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
                 # Timestamp is now shown at the end of the next line
             
             else:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish**\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
                 # Removed 'bet with' text
                 
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    summary += f"in-the-money (${contract_parts[0]}) options expiring on {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"in-the-money (${contract_parts[0]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
                     summary += f"in-the-money (${contract_parts[0]}) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
@@ -1113,11 +1113,11 @@ def get_simplified_unusual_activity_summary(ticker):
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish**\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
                 # Removed 'occurred at' timestamp
                 summary += f"with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish**\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
                 # Removed 'bet with'
                 summary += f"options from the largest unusual activity.\n\n"
         
