@@ -1098,7 +1098,7 @@ def get_simplified_unusual_activity_summary(ticker):
             
             else:
                 summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish**\n"
-                summary += f"bet with "
+                # Removed 'bet with' text
                 
             # Add strike price and expiration
             if len(contract_parts) >= 3:
