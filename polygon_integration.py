@@ -909,22 +909,21 @@ def get_unusual_options_activity(ticker):
         print(f"Not falling back to Yahoo Finance for {ticker} unusual options activity as requested")
         return None
 
+
 def extract_strike_from_symbol(symbol):
     """Extract actual strike price from option symbol like O:TSLA250417C00252500"""
+    if not symbol or not symbol.startswith('O:'):
+        return None
+            
     try:
-        if not symbol or not isinstance(symbol, str) or not symbol.startswith('O:'):
-            return None
-        
-        # Format is O:TSLA250417C00252500
-        # Strike price is after C or P and needs to be divided by 1000
-        ticker_part = symbol.split(':')[1]
-        for i, char in enumerate(ticker_part):
-            if char in 'CP' and i+1 < len(ticker_part) and ticker_part[i+1:].isdigit():
-                strike_value = int(ticker_part[i+1:]) / 1000.0
-                return f"{strike_value:.2f}"
-    except (ValueError, IndexError, TypeError):
-        pass
-    return None
+        # Format is O:TSLA250417C00252500 where last 8 digits are strike * 1000
+        strike_part = symbol.split('C')[-1] if 'C' in symbol else symbol.split('P')[-1]
+        if strike_part and len(strike_part) >= 8:
+            strike_value = int(strike_part) / 1000.0
+            return f"{strike_value:.2f}"
+        return None
+    except (ValueError, IndexError):
+        return None
 
 def get_simplified_unusual_activity_summary(ticker):
     """
@@ -1030,34 +1029,6 @@ def get_simplified_unusual_activity_summary(ticker):
         try:
             main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
-
-            # Extract the real strike price from option data
-            strike_price = None
-            if 'symbol' in main_contract:
-                strike_price = extract_strike_from_symbol(main_contract['symbol'])
-            if not strike_price and 'strike' in main_contract:
-                try:
-                    strike_price = f"{float(main_contract['strike']):.2f}"
-                except (ValueError, TypeError):
-                    pass
-            if not strike_price and len(contract_parts) >= 2:
-                try:
-                    if contract_parts[1].replace('.', '', 1).isdigit():
-                        strike_price = f"{float(contract_parts[1]):.2f}"
-                except (ValueError, IndexError):
-                    pass
-        
-            # Extract the real strike price from the option symbol or other sources
-            strike_price = None
-            if 'symbol' in main_contract:
-                strike_price = extract_strike_from_symbol(main_contract['symbol'])
-            if not strike_price and 'strike' in main_contract:
-                try:
-                    strike_price = f"{float(main_contract['strike']):.2f}"
-                except (ValueError, TypeError):
-                    pass
-            if not strike_price and len(contract_parts) >= 2 and contract_parts[1].replace('.', '', 1).isdigit():
-                strike_price = f"{float(contract_parts[1]):.2f}"
             
             # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
             if 'symbol' in main_contract:
@@ -1076,24 +1047,43 @@ def get_simplified_unusual_activity_summary(ticker):
             if not expiry_date and len(contract_parts) >= 3:
                 expiry_date = contract_parts[2]
                 
-            # Start the summary with integrated timestamp - no bet wording, no occurred at
-            summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-                
-            # Format with the proper in-the-money and strike price
-            if strike_price:
-                summary += f"in-the-money ({strike_price}) options "
+            # Start the summary with integrated timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
+                # Timestamp is now shown at the end of the next line
+            
             else:
-                summary += f"options "
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
+# Removed 'bet with' text
                 
-            # Add expiration date and purchase date
-            if expiry_date:
-                summary += f"expiring {expiry_date}, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+            # Add strike price and expiration
+            if len(contract_parts) >= 3:
+                # If we have a properly parsed expiration date
+                if expiry_date:
+                    # Try to extract the real strike price from the option symbol
+                    if 'symbol' in main_contract:
+                        strike_price = extract_strike_from_symbol(main_contract['symbol'])
+                        if strike_price:
+                            summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                        else:
+                            summary += f"in-the-money ({contract_parts[0]}.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    else:
+                        summary += f"in-the-money ({contract_parts[0]}.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                else:
+                    # Fallback to just the second part if we couldn't parse a proper date
+                    summary += f"in-the-money ({contract_parts[0]}.00) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
             else:
-                summary += f"expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+                summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
-            # Formatted error fallback without bet wording
-            summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-            summary += f"options expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+            # If we couldn't parse the contract but have a timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
+                # Removed 'occurred at' timestamp
+                summary += f"with options from the largest unusual activity.\n\n"
+            else:
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
+# Removed 'bet with' text
+                summary += f"options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
         if bearish_count > 0:
@@ -1107,34 +1097,6 @@ def get_simplified_unusual_activity_summary(ticker):
         try:
             main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
-
-            # Extract the real strike price from option data
-            strike_price = None
-            if 'symbol' in main_contract:
-                strike_price = extract_strike_from_symbol(main_contract['symbol'])
-            if not strike_price and 'strike' in main_contract:
-                try:
-                    strike_price = f"{float(main_contract['strike']):.2f}"
-                except (ValueError, TypeError):
-                    pass
-            if not strike_price and len(contract_parts) >= 2:
-                try:
-                    if contract_parts[1].replace('.', '', 1).isdigit():
-                        strike_price = f"{float(contract_parts[1]):.2f}"
-                except (ValueError, IndexError):
-                    pass
-        
-            # Extract the real strike price from the option symbol or other sources
-            strike_price = None
-            if 'symbol' in main_contract:
-                strike_price = extract_strike_from_symbol(main_contract['symbol'])
-            if not strike_price and 'strike' in main_contract:
-                try:
-                    strike_price = f"{float(main_contract['strike']):.2f}"
-                except (ValueError, TypeError):
-                    pass
-            if not strike_price and len(contract_parts) >= 2 and contract_parts[1].replace('.', '', 1).isdigit():
-                strike_price = f"{float(contract_parts[1]):.2f}"
             
             # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
             if 'symbol' in main_contract:
@@ -1153,24 +1115,43 @@ def get_simplified_unusual_activity_summary(ticker):
             if not expiry_date and len(contract_parts) >= 3:
                 expiry_date = contract_parts[2]
                 
-            # Start the summary with integrated timestamp - no bet wording, no occurred at
-            summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-                
-            # Format with the proper in-the-money and strike price
-            if strike_price:
-                summary += f"in-the-money ({strike_price}) options "
+            # Start the summary with integrated timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
+                # Timestamp is now shown at the end of the next line
+            
             else:
-                summary += f"options "
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
+                # Removed 'bet with' text
                 
-            # Add expiration date and purchase date
-            if expiry_date:
-                summary += f"expiring {expiry_date}, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+            # Add strike price and expiration
+            if len(contract_parts) >= 3:
+                # If we have a properly parsed expiration date
+                if expiry_date:
+                    # Try to extract the real strike price from the option symbol
+                    if 'symbol' in main_contract:
+                        strike_price = extract_strike_from_symbol(main_contract['symbol'])
+                        if strike_price:
+                            summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                        else:
+                            summary += f"in-the-money ({contract_parts[0]}.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    else:
+                        summary += f"in-the-money ({contract_parts[0]}.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                else:
+                    # Fallback to just the second part if we couldn't parse a proper date
+                    summary += f"in-the-money ({contract_parts[0]}.00) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
             else:
-                summary += f"expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+                summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
-            # Formatted error fallback without bet wording
-            summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-            summary += f"options expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+            # If we couldn't parse the contract but have a timestamp
+            if timestamp_str:
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
+                # Removed 'occurred at' timestamp
+                summary += f"with options from the largest unusual activity.\n\n"
+            else:
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
+                # Removed 'bet with'
+                summary += f"options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
         if bullish_count > 0:
@@ -1179,7 +1160,7 @@ def get_simplified_unusual_activity_summary(ticker):
             summary += f"• Institutional Investors are heavily favoring put options with dominant put volume.\n\n"
             
     else:
-        summary += f"• I'm seeing mixed activity for {ticker}, Inc.. There is balanced call and put activity.\n\n"
+        summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
     
     # Add overall flow percentages
     summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
