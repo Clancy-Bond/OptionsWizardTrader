@@ -335,7 +335,7 @@ class OptionsBot(commands.Bot):
                 await message.channel.send(response_text)
             elif using_fallback:
                 # Data is limited due to API restrictions
-                embed = discord.Embed(
+                embed = self.create_styled_embed(
                     title=f"📊 {parsed['ticker']} Market Data",
                     color=discord.Color.blue()  # Blue for informational
                 )
@@ -354,7 +354,7 @@ class OptionsBot(commands.Bot):
                 await message.channel.send(embed=embed)
             elif no_activity and not has_whale_emoji:
                 # No unusual activity detected
-                embed = discord.Embed(
+                embed = self.create_styled_embed(
                     title=f"📊 {parsed['ticker']} No Unusual Activity",
                     color=discord.Color.light_gray()  # Grey for neutral
                 )
@@ -488,7 +488,7 @@ class OptionsBot(commands.Bot):
         
         if using_fallback:
             # Data is limited due to API restrictions
-            embed = discord.Embed(
+            embed = self.create_styled_embed(
                 title=f"📊 {parsed['ticker']} Market Data",
                 color=discord.Color.blue()  # Blue for informational
             )
@@ -506,7 +506,7 @@ class OptionsBot(commands.Bot):
             
         elif no_activity and not has_whale_emoji:
             # No unusual activity detected
-            embed = discord.Embed(
+            embed = self.create_styled_embed(
                 title=f"📊 {parsed['ticker']} No Unusual Activity",
                 color=discord.Color.light_gray()  # Grey for neutral
             )
@@ -583,7 +583,7 @@ class OptionsBot(commands.Bot):
                     embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
             
             # Format response as Discord embed with whale emoji
-            embed = discord.Embed(
+            embed = self.create_styled_embed(
                 title=f"🐳 {parsed['ticker']} Unusual Options Activity (Calls & Puts) 🐳",
                 color=embed_color
             )
