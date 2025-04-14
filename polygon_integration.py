@@ -21,6 +21,10 @@ valid_ticker_cache = set()
 exchange_ticker_cache = {}
 option_chain_cache = {}
 
+# Cache for unusual options activity with timestamps
+# Format: {ticker: {"timestamp": datetime, "data": activity_data}}
+unusual_activity_cache = {}
+
 def get_headers():
     """
     Get authenticated headers for Polygon API requests
