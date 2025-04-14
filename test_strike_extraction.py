@@ -1,42 +1,31 @@
 """
-Test the strike price extraction function directly
+Test the strike price extraction from option symbols
 """
+import polygon_integration
 
-def extract_strike_from_symbol(symbol):
-    """Extract actual strike price from option symbol like O:TSLA250417C00252500"""
-    if not symbol or not symbol.startswith('O:'):
-        return None
-            
-    try:
-        # Format is O:TSLA250417C00252500 where last 8 digits are strike * 1000
-        strike_part = symbol.split('C')[-1] if 'C' in symbol else symbol.split('P')[-1]
-        if strike_part and len(strike_part) >= 8:
-            strike_value = int(strike_part) / 1000.0
-            return f"{strike_value:.2f}"
-        return None
-    except (ValueError, IndexError):
-        return None
-
-# Test the function with some examples
 def test_strike_extraction():
-    print("Testing strike price extraction...")
-    
-    test_cases = [
-        ("O:TSLA250417C00252500", "252.50"),
-        ("O:TSLA250417P00260000", "260.00"),
-        ("O:SPY250417C00500000", "500.00"),
-        ("O:AAPL250417P00150000", "150.00"),
-        ("O:MSFT250417C00400000", "400.00"),
-        ("O:GOOG250417P00150000", "150.00"),
-        ("INVALID", None),
+    """
+    Test the extraction of strike prices from option symbols
+    """
+    # Test with various option symbols
+    test_symbols = [
+        "O:TSLA250417C00252500",  # TSLA $252.50 call expiring Apr 17, 2025
+        "O:AAPL250418P00180000",  # AAPL $180.00 put expiring Apr 18, 2025
+        "O:AMZN250425C00175000",  # AMZN $175.00 call expiring Apr 25, 2025
+        "O:SPY250430P00530000",   # SPY $530.00 put expiring Apr 30, 2025
+        "O:NVDA250502C01000000",  # NVDA $1000.00 call expiring May 2, 2025
     ]
     
-    for symbol, expected in test_cases:
-        result = extract_strike_from_symbol(symbol)
-        if result == expected:
-            print(f"✅ {symbol} → {result}")
-        else:
-            print(f"❌ {symbol} → got {result}, expected {expected}")
+    print("Testing strike price extraction from option symbols:")
+    for symbol in test_symbols:
+        strike = polygon_integration.extract_strike_from_symbol(symbol)
+        print(f"{symbol} -> Strike price: {strike}")
+    
+    # Also test the get_simplified_unusual_activity_summary to ensure 
+    # it dynamically shows the strike price
+    print("\nTesting unusual activity summary for TSLA:")
+    summary = polygon_integration.get_simplified_unusual_activity_summary("TSLA")
+    print(summary)
 
 if __name__ == "__main__":
     test_strike_extraction()

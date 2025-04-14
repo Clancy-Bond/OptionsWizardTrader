@@ -909,21 +909,22 @@ def get_unusual_options_activity(ticker):
         print(f"Not falling back to Yahoo Finance for {ticker} unusual options activity as requested")
         return None
 
-
 def extract_strike_from_symbol(symbol):
     """Extract actual strike price from option symbol like O:TSLA250417C00252500"""
-    if not symbol or not symbol.startswith('O:'):
-        return None
-            
     try:
-        # Format is O:TSLA250417C00252500 where last 8 digits are strike * 1000
-        strike_part = symbol.split('C')[-1] if 'C' in symbol else symbol.split('P')[-1]
-        if strike_part and len(strike_part) >= 8:
-            strike_value = int(strike_part) / 1000.0
-            return f"{strike_value:.2f}"
-        return None
-    except (ValueError, IndexError):
-        return None
+        if not symbol or not isinstance(symbol, str) or not symbol.startswith('O:'):
+            return None
+        
+        # Format is O:TSLA250417C00252500
+        # Strike price is after C or P and needs to be divided by 1000
+        ticker_part = symbol.split(':')[1]
+        for i, char in enumerate(ticker_part):
+            if char in 'CP' and i+1 < len(ticker_part) and ticker_part[i+1:].isdigit():
+                strike_value = int(ticker_part[i+1:]) / 1000.0
+                return f"{strike_value:.2f}"
+    except (ValueError, IndexError, TypeError):
+        pass
+    return None
 
 def get_simplified_unusual_activity_summary(ticker):
     """
@@ -1007,256 +1008,10 @@ def get_simplified_unusual_activity_summary(ticker):
                 
                 # Find specific trade information based on sentiment
                 if overall_sentiment == "bullish":
-            # Get the option with the largest flow
-            if len(activity) > 0:
-                # Sort by premium (largest first)
-                sorted_activity = sorted(activity, key=lambda x: x.get('premium', 0), reverse=True)
-                
-                # Get the first bullish option
-                main_contract = next((item for item in sorted_activity if item.get('sentiment') == 'bullish'), sorted_activity[0])
-                
-                # Extract the actual strike price
-                strike_price = None
-                
-                # First try to get from the 'strike' field directly
-                if 'strike' in main_contract:
-                    try:
-                        strike_price = f"{float(main_contract['strike']):.2f}"
-                    except (ValueError, TypeError):
-                        pass
-                
-                # Then try to extract from the symbol
-                if not strike_price and 'symbol' in main_contract:
-                    try:
-                        symbol = main_contract['symbol']
-                        if symbol.startswith('O:'):
-                            # Extract from option symbol format O:TSLA250417C00252500
-                            ticker_part = symbol.split(':')[1]
-                            for i, char in enumerate(ticker_part):
-                                if char in 'CP' and i+1 < len(ticker_part) and ticker_part[i+1:].isdigit():
-                                    strike_value = int(ticker_part[i+1:]) / 1000.0
-                                    strike_price = f"{strike_value:.2f}"
-                                    break
-                    except (ValueError, IndexError, TypeError):
-                        pass
-                
-                # Finally try to parse from the contract string
-                if not strike_price and 'contract' in main_contract:
-                    try:
-                        contract_parts = main_contract['contract'].split()
-                        if len(contract_parts) >= 2 and contract_parts[1].replace('.', '', 1).isdigit():
-                            strike_price = f"{float(contract_parts[1]):.2f}"
-                    except (ValueError, IndexError, TypeError):
-                        pass
-                
-                # If we still don't have a strike price, use the option's position in the chain
-                if not strike_price:
-                    try:
-                        options_index = activity.index(main_contract)
-                        base_strike = 250.00  # Starting point
-                        strike_price = f"{base_strike + (options_index * 5):.2f}"  # Increment by 5 for each position
-                    except (ValueError, IndexError):
-                        strike_price = "250.00"  # Last resort fallback
-                
-                # Extract expiration date
-                expiry_date = ""
-                if 'expiration' in main_contract:
-                    try:
-                        # Convert from YYYY-MM-DD to MM/DD/YY
-                        expiry_parts = main_contract['expiration'].split('-')
-                        if len(expiry_parts) == 3:
-                            year, month, day = expiry_parts
-                            expiry_date = f"{month}/{day}/{year[-2:]}"
-                    except (ValueError, IndexError):
-                        pass
-                
-                # Try to extract from symbol if not found yet
-                if not expiry_date and 'symbol' in main_contract:
-                    try:
-                        symbol = main_contract['symbol']
-                        if symbol.startswith('O:'):
-                            # Format is O:TSLA250417C00252500
-                            ticker_part = symbol.split(':')[1]
-                            ticker_symbol = ''
-                            for char in ticker_part:
-                                if char.isalpha():
-                                    ticker_symbol += char
-                                else:
-                                    break
-                            
-                            date_start = len(ticker_symbol)
-                            if len(ticker_part) > date_start + 6:
-                                year = '20' + ticker_part[date_start:date_start+2]
-                                month = ticker_part[date_start+2:date_start+4]
-                                day = ticker_part[date_start+4:date_start+6]
-                                expiry_date = f"{month}/{day}/{year[-2:]}"
-                    except (ValueError, IndexError):
-                        pass
-                
-                # Fallback to contract string
-                if not expiry_date and 'contract' in main_contract:
-                    try:
-                        contract_parts = main_contract['contract'].split()
-                        if len(contract_parts) >= 3:
-                            date_part = contract_parts[2]
-                            # Try to parse various formats
-                            if '-' in date_part:
-                                # YYYY-MM-DD format
-                                year, month, day = date_part.split('-')
-                                expiry_date = f"{month}/{day}/{year[-2:]}"
-                            elif '/' in date_part:
-                                # MM/DD/YYYY format
-                                month, day, year = date_part.split('/')
-                                expiry_date = f"{month}/{day}/{year[-2:]}"
-                    except (ValueError, IndexError):
-                        pass
-                
-                # If we still don't have a date, use a fallback
-                if not expiry_date:
-                    expiry_date = "04/17/25"  # Common expiration
-                
-                # Get purchase date
-                timestamp_str = ""
-                if 'timestamp_human' in main_contract:
-                    timestamp_str = main_contract['timestamp_human']
-                elif 'transaction_date' in main_contract:
-                    timestamp_str = main_contract['transaction_date']
-                
-                # If we don't have a timestamp, use today's date
-                if not timestamp_str:
-                    from datetime import datetime
-                    now = datetime.now()
-                    timestamp_str = now.strftime("%m/%d/%y")
-                
-                # Format the summary with all the extracted data
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-                summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str}.\n\n"
-elif overall_sentiment == "bearish":
-            # Get the option with the largest flow
-            if len(activity) > 0:
-                # Sort by premium (largest first)
-                sorted_activity = sorted(activity, key=lambda x: x.get('premium', 0), reverse=True)
-                
-                # Get the first bearish option
-                main_contract = next((item for item in sorted_activity if item.get('sentiment') == 'bearish'), sorted_activity[0])
-                
-                # Extract the actual strike price
-                strike_price = None
-                
-                # First try to get from the 'strike' field directly
-                if 'strike' in main_contract:
-                    try:
-                        strike_price = f"{float(main_contract['strike']):.2f}"
-                    except (ValueError, TypeError):
-                        pass
-                
-                # Then try to extract from the symbol
-                if not strike_price and 'symbol' in main_contract:
-                    try:
-                        symbol = main_contract['symbol']
-                        if symbol.startswith('O:'):
-                            # Extract from option symbol format O:TSLA250417C00252500
-                            ticker_part = symbol.split(':')[1]
-                            for i, char in enumerate(ticker_part):
-                                if char in 'CP' and i+1 < len(ticker_part) and ticker_part[i+1:].isdigit():
-                                    strike_value = int(ticker_part[i+1:]) / 1000.0
-                                    strike_price = f"{strike_value:.2f}"
-                                    break
-                    except (ValueError, IndexError, TypeError):
-                        pass
-                
-                # Finally try to parse from the contract string
-                if not strike_price and 'contract' in main_contract:
-                    try:
-                        contract_parts = main_contract['contract'].split()
-                        if len(contract_parts) >= 2 and contract_parts[1].replace('.', '', 1).isdigit():
-                            strike_price = f"{float(contract_parts[1]):.2f}"
-                    except (ValueError, IndexError, TypeError):
-                        pass
-                
-                # If we still don't have a strike price, use the option's position in the chain
-                if not strike_price:
-                    try:
-                        options_index = activity.index(main_contract)
-                        base_strike = 250.00  # Starting point
-                        strike_price = f"{base_strike + (options_index * 5):.2f}"  # Increment by 5 for each position
-                    except (ValueError, IndexError):
-                        strike_price = "250.00"  # Last resort fallback
-                
-                # Extract expiration date
-                expiry_date = ""
-                if 'expiration' in main_contract:
-                    try:
-                        # Convert from YYYY-MM-DD to MM/DD/YY
-                        expiry_parts = main_contract['expiration'].split('-')
-                        if len(expiry_parts) == 3:
-                            year, month, day = expiry_parts
-                            expiry_date = f"{month}/{day}/{year[-2:]}"
-                    except (ValueError, IndexError):
-                        pass
-                
-                # Try to extract from symbol if not found yet
-                if not expiry_date and 'symbol' in main_contract:
-                    try:
-                        symbol = main_contract['symbol']
-                        if symbol.startswith('O:'):
-                            # Format is O:TSLA250417C00252500
-                            ticker_part = symbol.split(':')[1]
-                            ticker_symbol = ''
-                            for char in ticker_part:
-                                if char.isalpha():
-                                    ticker_symbol += char
-                                else:
-                                    break
-                            
-                            date_start = len(ticker_symbol)
-                            if len(ticker_part) > date_start + 6:
-                                year = '20' + ticker_part[date_start:date_start+2]
-                                month = ticker_part[date_start+2:date_start+4]
-                                day = ticker_part[date_start+4:date_start+6]
-                                expiry_date = f"{month}/{day}/{year[-2:]}"
-                    except (ValueError, IndexError):
-                        pass
-                
-                # Fallback to contract string
-                if not expiry_date and 'contract' in main_contract:
-                    try:
-                        contract_parts = main_contract['contract'].split()
-                        if len(contract_parts) >= 3:
-                            date_part = contract_parts[2]
-                            # Try to parse various formats
-                            if '-' in date_part:
-                                # YYYY-MM-DD format
-                                year, month, day = date_part.split('-')
-                                expiry_date = f"{month}/{day}/{year[-2:]}"
-                            elif '/' in date_part:
-                                # MM/DD/YYYY format
-                                month, day, year = date_part.split('/')
-                                expiry_date = f"{month}/{day}/{year[-2:]}"
-                    except (ValueError, IndexError):
-                        pass
-                
-                # If we still don't have a date, use a fallback
-                if not expiry_date:
-                    expiry_date = "04/17/25"  # Common expiration
-                
-                # Get purchase date
-                timestamp_str = ""
-                if 'timestamp_human' in main_contract:
-                    timestamp_str = main_contract['timestamp_human']
-                elif 'transaction_date' in main_contract:
-                    timestamp_str = main_contract['transaction_date']
-                
-                # If we don't have a timestamp, use today's date
-                if not timestamp_str:
-                    from datetime import datetime
-                    now = datetime.now()
-                    timestamp_str = now.strftime("%m/%d/%y")
-                
-                # Format the summary with all the extracted data
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-                summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str}.\n\n"
-else:
+                    main_trade = next((item for item in activity if item.get('sentiment') == 'bullish'), top_activity)
+                elif overall_sentiment == "bearish":
+                    main_trade = next((item for item in activity if item.get('sentiment') == 'bearish'), top_activity)
+                else:
                     main_trade = top_activity
                     
                 # Store the timestamp for use in the main trade description
@@ -1275,6 +1030,18 @@ else:
         try:
             main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
+
+            # Extract the real strike price from the option symbol or other sources
+            strike_price = None
+            if 'symbol' in main_contract:
+                strike_price = extract_strike_from_symbol(main_contract['symbol'])
+            if not strike_price and 'strike' in main_contract:
+                try:
+                    strike_price = f"{float(main_contract['strike']):.2f}"
+                except (ValueError, TypeError):
+                    pass
+            if not strike_price and len(contract_parts) >= 2 and contract_parts[1].replace('.', '', 1).isdigit():
+                strike_price = f"{float(contract_parts[1]):.2f}"
             
             # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
             if 'symbol' in main_contract:
@@ -1295,50 +1062,30 @@ else:
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-                # Timestamp is now shown at the end of the next line
-            
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish bet that\n"
+                summary += f"occurred at {timestamp_str} with "
             else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-# Removed 'bet with' text
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+                summary += f"bet with "
                 
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    # Try to extract the real strike price from the option symbol
-                    if 'symbol' in main_contract:
-                        
-                        # Try to get the strike price from different sources
-                        strike_price = None
-                        if 'symbol' in main_contract:
-                            strike_price = extract_strike_from_symbol(main_contract['symbol'])
-                        if not strike_price and 'strike' in main_contract:
-                            strike_price = f"{float(main_contract['strike']):.2f}"
-                        if not strike_price and len(contract_parts) >= 3 and contract_parts[1].replace('.', '', 1).isdigit():
-                            strike_price = f"{float(contract_parts[1]):.2f}"
-
-                        if strike_price:
-                            summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
-                        else:
-                            summary += f"in-the-money (255.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
-                    else:
-                        summary += f"in-the-money (255.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (255.00) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-                # Removed 'occurred at' timestamp
-                summary += f"with options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish bet that\n"
+                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-# Removed 'bet with' text
-                summary += f"options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
+                summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
         if bearish_count > 0:
@@ -1352,6 +1099,18 @@ else:
         try:
             main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
+
+            # Extract the real strike price from the option symbol or other sources
+            strike_price = None
+            if 'symbol' in main_contract:
+                strike_price = extract_strike_from_symbol(main_contract['symbol'])
+            if not strike_price and 'strike' in main_contract:
+                try:
+                    strike_price = f"{float(main_contract['strike']):.2f}"
+                except (ValueError, TypeError):
+                    pass
+            if not strike_price and len(contract_parts) >= 2 and contract_parts[1].replace('.', '', 1).isdigit():
+                strike_price = f"{float(contract_parts[1]):.2f}"
             
             # Extract expiration date from option symbol (O:TSLA250417C00252500 → 2025-04-17)
             if 'symbol' in main_contract:
@@ -1372,50 +1131,30 @@ else:
                 
             # Start the summary with integrated timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-                # Timestamp is now shown at the end of the next line
-            
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish bet that\n"
+                summary += f"occurred at {timestamp_str} with "
             else:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-                # Removed 'bet with' text
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"bet with "
                 
             # Add strike price and expiration
             if len(contract_parts) >= 3:
                 # If we have a properly parsed expiration date
                 if expiry_date:
-                    # Try to extract the real strike price from the option symbol
-                    if 'symbol' in main_contract:
-                        
-                        # Try to get the strike price from different sources
-                        strike_price = None
-                        if 'symbol' in main_contract:
-                            strike_price = extract_strike_from_symbol(main_contract['symbol'])
-                        if not strike_price and 'strike' in main_contract:
-                            strike_price = f"{float(main_contract['strike']):.2f}"
-                        if not strike_price and len(contract_parts) >= 3 and contract_parts[1].replace('.', '', 1).isdigit():
-                            strike_price = f"{float(contract_parts[1]):.2f}"
-
-                        if strike_price:
-                            summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
-                        else:
-                            summary += f"in-the-money (255.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
-                    else:
-                        summary += f"in-the-money (255.00) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring on {expiry_date}.\n\n"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (255.00) options expiring soon, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
+                    summary += f"${contract_parts[0]} {contract_parts[1]}-the-money options expiring soon.\n\n"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
             if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-                # Removed 'occurred at' timestamp
-                summary += f"with options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish bet that\n"
+                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
             else:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
-                # Removed 'bet with'
-                summary += f"options from the largest unusual activity.\n\n"
+                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
+                summary += f"bet with options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
         if bullish_count > 0:
@@ -1424,7 +1163,7 @@ else:
             summary += f"• Institutional Investors are heavily favoring put options with dominant put volume.\n\n"
             
     else:
-        summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
+        summary += f"• I'm seeing mixed activity for {ticker}, Inc.. There is balanced call and put activity.\n\n"
     
     # Add overall flow percentages
     summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
