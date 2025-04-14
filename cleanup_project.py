@@ -35,15 +35,22 @@ ESSENTIAL_FILES = [
     "pyproject.toml"
 ]
 
-# Essential directories to keep
-ESSENTIAL_DIRS = [
-    "pages",
-    "utils"
+# Additional specific files to keep
+ADDITIONAL_KEEP_FILES = [
+    # Add any other specific files here
+    "theme_selector.py",
+    "polygon_tickers.json",
+    "valid_tickers.json",
+    "common_words.txt",
+    "generated-icon.png"
 ]
 
-# Pattern prefixes to ALWAYS keep regardless of name
-KEEP_PREFIXES = [
-    # None for now - we'll keep files by exact name
+# Essential directories to keep entirely (don't process files within)
+ESSENTIAL_DIRS = [
+    "pages",
+    "utils",
+    "attached_assets",
+    ".streamlit"
 ]
 
 # File patterns to always delete
@@ -60,65 +67,62 @@ DELETE_PATTERNS = [
     "update_",     # Update scripts
     "extract_",    # Extract scripts
     "apply_",      # Apply scripts
-    "clean_"       # Cleanup scripts
+    "clean_"       # Cleanup scripts (except this one)
+]
+
+# System directories to skip completely (don't process)
+SKIP_DIRS = [
+    ".git",
+    "pythonlibs",
+    ".upm",
+    "__pycache__",
+    "temp_repo",
+    "venv"
 ]
 
 def should_keep_file(filename):
     """Determine if a file should be kept"""
     # Always keep essential files
-    if filename in ESSENTIAL_FILES:
-        return True
-        
-    # Always keep files with essential prefixes
-    if any(filename.startswith(prefix) for prefix in KEEP_PREFIXES):
+    if filename in ESSENTIAL_FILES or filename in ADDITIONAL_KEEP_FILES:
         return True
         
     # Delete files matching patterns to delete
     if any(pattern in filename for pattern in DELETE_PATTERNS):
+        # Special case: don't delete this cleanup script
+        if filename == "cleanup_project.py":
+            return True
         return False
         
-    # Keep all files in pages and utils directories
-    if "/" in filename and filename.split("/")[0] in ESSENTIAL_DIRS:
-        return True
+    # Keep all files in essential directories
+    for dir_name in ESSENTIAL_DIRS:
+        if filename.startswith(f"{dir_name}/") or filename == dir_name:
+            return True
         
-    # By default, don't keep the file (strict cleanup)
-    return False
+    # By default, keep the file (safer approach)
+    return True
 
-def cleanup_project():
+def cleanup_project(confirm=False):
     """Remove unnecessary files while keeping essential functionality"""
-    # List all files and directories
-    all_files = []
-    for root, dirs, files in os.walk('.'):
-        # Skip .git directory
-        if '.git' in root:
-            continue
-            
-        for file in files:
-            # Get relative path
-            rel_path = os.path.join(root, file).lstrip('./')
-            if rel_path.startswith('/'):
-                rel_path = rel_path[1:]
-            all_files.append(rel_path)
+    # Get list of files in the root directory only
+    root_files = [f for f in os.listdir('.') if os.path.isfile(f)]
     
     # Identify files to delete
     files_to_delete = []
-    for filename in all_files:
+    for filename in root_files:
         if not should_keep_file(filename):
             files_to_delete.append(filename)
     
     # Print summary before deletion
-    print(f"Found {len(all_files)} total files")
-    print(f"Keeping {len(all_files) - len(files_to_delete)} essential files")
+    print(f"Found {len(root_files)} files in the root directory")
     print(f"Will delete {len(files_to_delete)} unnecessary files")
     
-    # Ask for confirmation
+    # List files that will be deleted
     print("\nFiles that will be deleted:")
     for filename in sorted(files_to_delete):
         print(f"  - {filename}")
     
-    confirmation = input("\nAre you sure you want to delete these files? (yes/no): ")
-    if confirmation.lower() != 'yes':
-        print("Cleanup cancelled")
+    if not confirm:
+        print("\nRun with --confirm to execute deletion")
         return
     
     # Delete files
@@ -132,4 +136,7 @@ def cleanup_project():
     print("\nCleanup complete!")
 
 if __name__ == "__main__":
-    cleanup_project()
+    import sys
+    # Check if --confirm flag is passed
+    confirm = "--confirm" in sys.argv
+    cleanup_project(confirm)
