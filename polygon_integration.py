@@ -21,9 +21,8 @@ valid_ticker_cache = set()
 exchange_ticker_cache = {}
 option_chain_cache = {}
 
-# Cache for unusual options activity with timestamps
-# Format: {ticker: {"timestamp": datetime, "data": activity_data}}
-unusual_activity_cache = {}
+# Cache for unusual options activity with timestamps now handled by cache_module.py
+# See cache_module.py for implementation details
 
 def get_headers():
     """
@@ -767,22 +766,10 @@ def get_unusual_options_activity(ticker):
     today = current_time.strftime('%Y-%m-%d')
     
     # Check if we have cached data for this ticker that's still valid (less than 5 minutes old)
-    if ticker in unusual_activity_cache:
-        cache_entry = unusual_activity_cache[ticker]
-        cache_age = (current_time - cache_entry["timestamp"]).total_seconds()
-        
-        # If cache is less than 5 minutes old (300 seconds), use it
-        if cache_age < 300:
-            print(f"Using cached unusual activity data for {ticker} ({cache_age:.1f} seconds old)")
-            # Add more detailed debug info about what's in the cache
-            cached_data = cache_entry["data"]
-            if cached_data:
-                print(f"DEBUG: Cache contains {len(cached_data)} items")
-            else:
-                print(f"DEBUG: Cache contains empty or None data")
-            return cached_data
-        else:
-            print(f"Cached data for {ticker} is stale ({cache_age:.1f} seconds old), refreshing...")
+    print(f"DEBUG: Cache check before API call - {ticker} {'in' if cache_module.cache_contains(ticker) else 'not in'} cache")
+    cached_data, found = cache_module.get_from_cache(ticker)
+    if found:
+        return cached_data
     
     try:
         # Get options for today's date
@@ -919,10 +906,7 @@ def get_unusual_options_activity(ticker):
             print(f"Too many 403 errors for {ticker}, but not falling back to Yahoo Finance as requested")
             # Cache empty results to prevent repeated API calls that will fail
             empty_result = []
-            unusual_activity_cache[ticker] = {
-                "timestamp": datetime.now(),
-                "data": empty_result
-            }
+            cache_module.add_to_cache(ticker, empty_result)
             print(f"Cached empty result for {ticker} due to API errors (will expire in 5 minutes)")
             # Return empty list to indicate no unusual activity found
             return empty_result
