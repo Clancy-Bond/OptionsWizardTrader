@@ -56,8 +56,22 @@ def should_use_cached_data(cache_timestamp):
     
     # During market hours: 5-minute expiration
     if is_market_open():
+        # In market hours, cache has a 5-minute expiration
         cache_age = (now - cache_timestamp).total_seconds()
-        return cache_age < 300  # Less than 5 minutes old
+        
+        # For scenarios where we're explicitly testing market hours
+        # Convert timestamps to same timezone for accurate comparison
+        if now.tzinfo and cache_timestamp.tzinfo:
+            now_time = now.astimezone(eastern)
+            cache_time = cache_timestamp.astimezone(eastern)
+            
+            # If the timestamps are on same day and both during market hours
+            if (now_time.date() == cache_time.date() and 
+                time(9, 30) <= now_time.time() <= time(16, 15) and
+                time(9, 30) <= cache_time.time() <= time(16, 15)):
+                return cache_age < 300  # Less than 5 minutes old
+            
+        return cache_age < 300  # Standard 5-minute expiration
     
     # Get today's market close time
     today_market_close = eastern.localize(
@@ -90,12 +104,22 @@ def should_use_cached_data(cache_timestamp):
         # Calculate last Friday
         days_since_friday = (now.weekday() - 4) % 7
         last_friday = now.date() - timedelta(days=days_since_friday)
+        
+        # Friday market close time
         friday_close = eastern.localize(
             datetime.combine(last_friday, time(16, 15, 0))
         )
         
-        # Use cache if it was created after Friday market close
-        return cache_timestamp >= friday_close
+        # Check if the cache entry was created after market close on Friday
+        if cache_timestamp.date() == last_friday and cache_timestamp.time() >= time(16, 15, 0):
+            return True
+        
+        # For entries created on Saturday or Sunday, they're valid if created during the weekend
+        if cache_timestamp.weekday() >= 5:
+            return True
+            
+        # Otherwise the entry is too old (from before Friday close)
+        return False
     
     # Should not reach here during normal operation
     # Fallback to 5-minute expiration

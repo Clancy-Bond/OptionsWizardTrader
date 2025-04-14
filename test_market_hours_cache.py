@@ -2,7 +2,7 @@
 Test the market-hours-aware caching functionality
 """
 import cache_module
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import pytz
 
 def print_market_status():
@@ -16,125 +16,176 @@ def print_market_status():
     print(f"Current time (ET): {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     print(f"Day of week: {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][now.weekday()]}")
 
-def test_with_simulated_timestamps():
-    """Test cache behavior with simulated timestamps"""
-    print("\n=== Testing with simulated timestamps ===")
-    eastern = pytz.timezone('US/Eastern')
+def test_with_mocked_market_conditions():
+    """
+    Test cache behavior with mocked market conditions
     
-    # Test scenarios
-    scenarios = [
-        # Weekend scenarios
-        {
-            "name": "Cache from Friday close, checked on Saturday",
-            "cache_time": "Friday 16:30",
-            "check_time": "Saturday 12:00", 
-            "expected": True
-        },
-        {
-            "name": "Cache from Friday open, checked on Saturday",
-            "cache_time": "Friday 10:30",
-            "check_time": "Saturday 12:00",
-            "expected": False
-        },
-        {
-            "name": "Cache from Friday close, checked on Sunday",
-            "cache_time": "Friday 16:30",
-            "check_time": "Sunday 12:00",
-            "expected": True
-        },
-        
-        # Weekday after-hours scenarios
-        {
-            "name": "Cache from Monday close, checked Tuesday pre-market",
-            "cache_time": "Monday 16:30",
-            "check_time": "Tuesday 8:00",
-            "expected": True
-        },
-        {
-            "name": "Cache from Monday open, checked Monday after-hours",
-            "cache_time": "Monday 10:30",
-            "check_time": "Monday 17:00",
-            "expected": False
-        },
-        {
-            "name": "Cache from Monday after-hours, checked Tuesday pre-market",
-            "cache_time": "Monday 17:30",
-            "check_time": "Tuesday 8:00",
-            "expected": True
-        },
-        
-        # Market hours scenarios
-        {
-            "name": "Cache from 3 minutes ago during market hours",
-            "cache_time": "Monday 10:30",
-            "check_time": "Monday 10:33",
-            "expected": True
-        },
-        {
-            "name": "Cache from 7 minutes ago during market hours",
-            "cache_time": "Monday 10:30",
-            "check_time": "Monday 10:37",
-            "expected": False
-        }
-    ]
+    This function temporarily patches the is_market_open and datetime.now functions
+    to simulate different market conditions for each test scenario
+    """
+    print("\n=== Testing with mocked market conditions ===")
     
-    # Get current time as reference
-    now = datetime.now(eastern)
-    current_weekday = now.weekday()
+    # Original functions to restore later
+    original_is_market_open = cache_module.is_market_open
+    original_datetime_now = datetime.now
     
-    # Find the last Friday if today is not Friday
-    days_to_friday = (current_weekday - 4) % 7
-    last_friday = now.date() - timedelta(days=days_to_friday)
-    
-    # Find the last Monday if today is not Monday
-    days_to_monday = (current_weekday - 0) % 7
-    last_monday = now.date() - timedelta(days=days_to_monday)
-    
-    # Test each scenario
-    for scenario in scenarios:
-        print(f"\nScenario: {scenario['name']}")
-        
-        # Parse the day and time
-        cache_day, cache_time = scenario['cache_time'].split()
-        check_day, check_time = scenario['check_time'].split()
-        
-        # Set the appropriate date based on day name
-        if cache_day == "Friday":
-            cache_date = last_friday
-        elif cache_day == "Saturday":
-            cache_date = last_friday + timedelta(days=1)
-        elif cache_day == "Sunday": 
-            cache_date = last_friday + timedelta(days=2)
-        elif cache_day == "Monday":
-            cache_date = last_monday
-        elif cache_day == "Tuesday":
-            cache_date = last_monday + timedelta(days=1)
+    try:
+        # Test scenarios
+        scenarios = [
+            # Weekend scenarios
+            {
+                "name": "Cache from Friday close, checked on Saturday",
+                "cache_day": 4,  # Friday
+                "cache_hour": 16,
+                "cache_minute": 30,
+                "check_day": 5,  # Saturday
+                "check_hour": 12,
+                "check_minute": 0,
+                "expected": True
+            },
+            {
+                "name": "Cache from Friday open, checked on Saturday",
+                "cache_day": 4,  # Friday
+                "cache_hour": 10,
+                "cache_minute": 30,
+                "check_day": 5,  # Saturday
+                "check_hour": 12,
+                "check_minute": 0,
+                "expected": False
+            },
+            {
+                "name": "Cache from Friday close, checked on Sunday",
+                "cache_day": 4,  # Friday
+                "cache_hour": 16,
+                "cache_minute": 30,
+                "check_day": 6,  # Sunday
+                "check_hour": 12,
+                "check_minute": 0,
+                "expected": True
+            },
             
-        if check_day == "Friday":
-            check_date = last_friday
-        elif check_day == "Saturday":
-            check_date = last_friday + timedelta(days=1)
-        elif check_day == "Sunday":
-            check_date = last_friday + timedelta(days=2)
-        elif check_day == "Monday":
-            check_date = last_monday
-        elif check_day == "Tuesday":
-            check_date = last_monday + timedelta(days=1)
+            # Weekday after-hours scenarios
+            {
+                "name": "Cache from Monday close, checked Tuesday pre-market",
+                "cache_day": 0,  # Monday
+                "cache_hour": 16,
+                "cache_minute": 30,
+                "check_day": 1,  # Tuesday
+                "check_hour": 8,
+                "check_minute": 0,
+                "expected": True
+            },
+            {
+                "name": "Cache from Monday open, checked Monday after-hours",
+                "cache_day": 0,  # Monday
+                "cache_hour": 10,
+                "cache_minute": 30,
+                "check_day": 0,  # Monday
+                "check_hour": 17,
+                "check_minute": 0,
+                "expected": False
+            },
+            {
+                "name": "Cache from Monday after-hours, checked Tuesday pre-market",
+                "cache_day": 0,  # Monday
+                "cache_hour": 17,
+                "cache_minute": 30,
+                "check_day": 1,  # Tuesday
+                "check_hour": 8,
+                "check_minute": 0,
+                "expected": True
+            },
             
-        # Create datetime objects with the specified times
-        cache_hour, cache_minute = map(int, cache_time.split(':'))
-        check_hour, check_minute = map(int, check_time.split(':'))
+            # Market hours scenarios
+            {
+                "name": "Cache from 3 minutes ago during market hours",
+                "cache_day": 0,  # Monday
+                "cache_hour": 10,
+                "cache_minute": 30,
+                "check_day": 0,  # Monday
+                "check_hour": 10,
+                "check_minute": 33,
+                "market_open": True,
+                "expected": True
+            },
+            {
+                "name": "Cache from 7 minutes ago during market hours",
+                "cache_day": 0,  # Monday
+                "cache_hour": 10,
+                "cache_minute": 30,
+                "check_day": 0,  # Monday
+                "check_hour": 10,
+                "check_minute": 37,
+                "market_open": True,
+                "expected": False
+            }
+        ]
         
-        cache_datetime = eastern.localize(datetime.combine(cache_date, datetime.min.time().replace(hour=cache_hour, minute=cache_minute)))
-        check_datetime = eastern.localize(datetime.combine(check_date, datetime.min.time().replace(hour=check_hour, minute=check_minute)))
+        # Base date for our tests (a Monday)
+        base_date = datetime(2025, 4, 14, tzinfo=pytz.timezone('US/Eastern'))
         
-        # Now check if it would be valid
-        result = cache_module.should_use_cached_data(cache_datetime)
-        print(f"Cache timestamp: {cache_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        print(f"Check timestamp: {check_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        print(f"Simulated result: {result}")
-        print(f"Expected result: {scenario['expected']}")
-        print(f"Test {'PASSED' if result == scenario['expected'] else 'FAILED'}")
+        # Test each scenario
+        for scenario in scenarios:
+            print(f"\nScenario: {scenario['name']}")
+            
+            # Create cache and check timestamps
+            cache_date = base_date + timedelta(days=scenario['cache_day'] - base_date.weekday())
+            cache_timestamp = cache_date.replace(
+                hour=scenario['cache_hour'], 
+                minute=scenario['cache_minute'],
+                second=0
+            )
+            
+            check_date = base_date + timedelta(days=scenario['check_day'] - base_date.weekday())
+            check_timestamp = check_date.replace(
+                hour=scenario['check_hour'], 
+                minute=scenario['check_minute'],
+                second=0
+            )
+            
+            # Mock the datetime.now function
+            class MockDateTime:
+                @staticmethod
+                def now(tz=None):
+                    if tz:
+                        return check_timestamp.astimezone(tz)
+                    return check_timestamp
+            
+            # Mock the is_market_open function
+            def mock_is_market_open():
+                # Check if we specifically set market_open for this scenario
+                if "market_open" in scenario:
+                    return scenario["market_open"]
+                
+                # Otherwise calculate based on weekday and time
+                if check_timestamp.weekday() > 4:  # Weekend
+                    return False
+                
+                # Check time (9:30am - 4:15pm)
+                current_time = check_timestamp.time()
+                market_open = time(9, 30, 0)
+                market_close = time(16, 15, 0)
+                
+                return market_open <= current_time <= market_close
+            
+            # Apply our mocks
+            datetime.now = MockDateTime.now
+            cache_module.is_market_open = mock_is_market_open
+            
+            # Test the cache validation
+            result = cache_module.should_use_cached_data(cache_timestamp)
+            
+            print(f"Cache timestamp: {cache_timestamp.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            print(f"Check timestamp: {check_timestamp.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            print(f"Market is {'OPEN' if mock_is_market_open() else 'CLOSED'}")
+            print(f"Simulated result: {result}")
+            print(f"Expected result: {scenario['expected']}")
+            print(f"Test {'PASSED' if result == scenario['expected'] else 'FAILED'}")
+    
+    finally:
+        # Restore original functions
+        cache_module.is_market_open = original_is_market_open
+        datetime.now = original_datetime_now
 
 def test_live_caching():
     """Test caching with actual timestamps"""
@@ -157,5 +208,5 @@ def test_live_caching():
 if __name__ == "__main__":
     print("=== Testing Market-Hours-Aware Caching ===")
     print_market_status()
-    test_with_simulated_timestamps()
+    test_with_mocked_market_conditions()
     test_live_caching()
