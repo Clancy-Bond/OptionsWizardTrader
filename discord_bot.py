@@ -141,6 +141,23 @@ class OptionsBot(commands.Bot):
         self.nlp = OptionsBotNLP()
         self.permissions = utils_file.load_permissions()
         
+        # Define cream background color for embeds
+        self.cream_color = 0xFFF5E1  # Hex code for light cream color
+        
+    def create_styled_embed(self, title, color):
+        """
+        Create a styled embed with cream background
+        
+        Args:
+            title: The title for the embed
+            color: The color for the left border (usually based on sentiment)
+            
+        Returns:
+            A Discord embed object with styled appearance
+        """
+        embed = discord.Embed(title=title, color=color)
+        return embed
+        
     async def on_ready(self):
         """Called when the bot is ready"""
         print(f"Logged in as {self.user} ({self.user.id})")
@@ -416,7 +433,7 @@ class OptionsBot(commands.Bot):
                         embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
                 
                 # Format response as Discord embed with whale emoji
-                embed = discord.Embed(
+                embed = self.create_styled_embed(
                     title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
                     color=embed_color
                 )
