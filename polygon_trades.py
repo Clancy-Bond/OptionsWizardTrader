@@ -19,15 +19,15 @@ def format_timestamp(timestamp_ns):
         timestamp_ns: Timestamp in nanoseconds
         
     Returns:
-        Formatted date and time string (MM/DD/YY h:MM:SS AM/PM ET)
+        Formatted date and time string in ISO format (YYYY-MM-DD)
     """
     if not timestamp_ns:
         return None
         
     # Convert nanoseconds to seconds
     timestamp_sec = timestamp_ns / 1e9
-    # Only include the date as requested (MM/DD/YY)
-    return datetime.fromtimestamp(timestamp_sec).strftime("%m/%d/%y")
+    # Format in ISO format (YYYY-MM-DD)
+    return datetime.fromtimestamp(timestamp_sec).strftime("%Y-%m-%d")
 
 def get_option_trade_data(option_symbol, min_size=5):
     """
