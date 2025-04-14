@@ -1062,7 +1062,16 @@ def get_simplified_unusual_activity_summary(ticker):
                 if expiry_date:
                     # Try to extract the real strike price from the option symbol
                     if 'symbol' in main_contract:
-                        strike_price = extract_strike_from_symbol(main_contract['symbol'])
+                        
+                        # Try to get the strike price from different sources
+                        strike_price = None
+                        if 'symbol' in main_contract:
+                            strike_price = extract_strike_from_symbol(main_contract['symbol'])
+                        if not strike_price and 'strike' in main_contract:
+                            strike_price = f"{float(main_contract['strike']):.2f}"
+                        if not strike_price and len(contract_parts) >= 3 and contract_parts[1].replace('.', '', 1).isdigit():
+                            strike_price = f"{float(contract_parts[1]):.2f}"
+
                         if strike_price:
                             summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
                         else:
@@ -1130,7 +1139,16 @@ def get_simplified_unusual_activity_summary(ticker):
                 if expiry_date:
                     # Try to extract the real strike price from the option symbol
                     if 'symbol' in main_contract:
-                        strike_price = extract_strike_from_symbol(main_contract['symbol'])
+                        
+                        # Try to get the strike price from different sources
+                        strike_price = None
+                        if 'symbol' in main_contract:
+                            strike_price = extract_strike_from_symbol(main_contract['symbol'])
+                        if not strike_price and 'strike' in main_contract:
+                            strike_price = f"{float(main_contract['strike']):.2f}"
+                        if not strike_price and len(contract_parts) >= 3 and contract_parts[1].replace('.', '', 1).isdigit():
+                            strike_price = f"{float(contract_parts[1]):.2f}"
+
                         if strike_price:
                             summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '04/11/25'}.\n\n"
                         else:
