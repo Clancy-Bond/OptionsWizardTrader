@@ -317,24 +317,24 @@ class OptionsBot(commands.Bot):
                 # Simple plain text response for no data
                 await message.channel.send(response_text)
             elif using_fallback:
-                # Data is limited due to API restrictions
-                embed = discord.Embed(
-                    title=f"📊 {parsed['ticker']} Market Data",
-                    color=discord.Color.blue()  # Blue for informational
-                )
-                
                 # Process the description
                 header_end = response_text.find("\n\n")
                 if header_end != -1:
                     description = response_text[header_end+2:]
                 else:
                     description = response_text
-                    
-                embed.description = description
+                
+                # Data is limited due to API restrictions
+                embed = discord.Embed(
+                    title=f"📊 {parsed['ticker']} Market Data",
+                    description=description,
+                    color=discord.Color.blue()  # Blue for informational
+                )
+                
                 embed.set_footer(text="Some premium data requires API plan upgrade. Using basic stock data.")
                 
-                # Send the embed
-                await message.channel.send(embed=embed)
+                # Send the embed as a reply to the original message
+                await message.reply(embed=embed)
             elif no_activity and not has_whale_emoji:
                 # No unusual activity detected
                 embed = discord.Embed(
@@ -415,12 +415,6 @@ class OptionsBot(commands.Bot):
                     else:
                         embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
                 
-                # Format response as Discord embed with whale emoji
-                embed = discord.Embed(
-                    title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
-                    color=embed_color
-                )
-                
                 # Format response text to bold key information
                 response_text = response_text.replace("Overall flow:", "**Overall flow:**")
                 
@@ -437,11 +431,16 @@ class OptionsBot(commands.Bot):
                         description = response_text
                 else:
                     description = response_text
-                    
-                embed.description = description
                 
-                # Send the embed message
-                await message.channel.send(embed=embed)
+                # Format response as Discord embed with whale emoji
+                embed = discord.Embed(
+                    title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
+                    description=description,  # Set in constructor instead of later
+                    color=embed_color
+                )
+                
+                # Send the embed message as a reply instead of a new message
+                await message.reply(embed=embed)
         except Exception as e:
             await message.channel.send(f"I encountered an error checking unusual options activity: {str(e)}")
     
@@ -470,38 +469,37 @@ class OptionsBot(commands.Bot):
         has_whale_emoji = "🐳" in response_text
         
         if using_fallback:
-            # Data is limited due to API restrictions
-            embed = discord.Embed(
-                title=f"📊 {parsed['ticker']} Market Data",
-                color=discord.Color.blue()  # Blue for informational
-            )
-            
             # Process the description
             header_end = response_text.find("\n\n")
             if header_end != -1:
                 description = response_text[header_end+2:]
             else:
                 description = response_text
-                
-            embed.description = description
+            
+            # Data is limited due to API restrictions
+            embed = discord.Embed(
+                title=f"📊 {parsed['ticker']} Market Data",
+                description=description,
+                color=discord.Color.blue()  # Blue for informational
+            )
+            
             # Since we have unlimited API calls, no need for the upgrade message
             embed.set_footer(text="Using available market data.")
             
         elif no_activity and not has_whale_emoji:
-            # No unusual activity detected
-            embed = discord.Embed(
-                title=f"📊 {parsed['ticker']} No Unusual Activity",
-                color=discord.Color.light_gray()  # Grey for neutral
-            )
-            
             # Process the description
             header_end = response_text.find("\n\n")
             if header_end != -1:
                 description = response_text[header_end+2:]
             else:
                 description = response_text
-                
-            embed.description = description
+            
+            # No unusual activity detected
+            embed = discord.Embed(
+                title=f"📊 {parsed['ticker']} No Unusual Activity",
+                description=description,
+                color=discord.Color.light_gray()  # Grey for neutral
+            )
             
         else:
             # Standard unusual activity response with sentiment
@@ -565,12 +563,6 @@ class OptionsBot(commands.Bot):
                 else:
                     embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
             
-            # Format response as Discord embed with whale emoji
-            embed = discord.Embed(
-                title=f"🐳 {parsed['ticker']} Unusual Options Activity (Calls & Puts) 🐳",
-                color=embed_color
-            )
-            
             # Format response text to bold key information
             response_text = response_text.replace("Overall flow:", "**Overall flow:**")
             
@@ -587,11 +579,16 @@ class OptionsBot(commands.Bot):
                     description = response_text
             else:
                 description = response_text
-                
-            embed.description = description
             
-        # Send the embed message
-        await message.channel.send(embed=embed)
+            # Format response as Discord embed with whale emoji
+            embed = discord.Embed(
+                title=f"🐳 {parsed['ticker']} Unusual Options Activity (Calls & Puts) 🐳",
+                description=description,  # Set in constructor instead of later
+                color=embed_color
+            )
+            
+        # Send the embed message as a reply instead of a new message
+        await message.reply(embed=embed)
 
 # Run the bot
 if __name__ == "__main__":
