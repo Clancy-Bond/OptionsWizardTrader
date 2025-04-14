@@ -141,23 +141,6 @@ class OptionsBot(commands.Bot):
         self.nlp = OptionsBotNLP()
         self.permissions = utils_file.load_permissions()
         
-        # Define cream background color for embeds
-        self.cream_color = 0xFFF5E1  # Hex code for light cream color
-        
-    def create_styled_embed(self, title, color):
-        """
-        Create a styled embed with cream background
-        
-        Args:
-            title: The title for the embed
-            color: The color for the left border (usually based on sentiment)
-            
-        Returns:
-            A Discord embed object with styled appearance
-        """
-        embed = discord.Embed(title=title, color=color)
-        return embed
-        
     async def on_ready(self):
         """Called when the bot is ready"""
         print(f"Logged in as {self.user} ({self.user.id})")
@@ -335,7 +318,7 @@ class OptionsBot(commands.Bot):
                 await message.channel.send(response_text)
             elif using_fallback:
                 # Data is limited due to API restrictions
-                embed = self.create_styled_embed(
+                embed = discord.Embed(
                     title=f"📊 {parsed['ticker']} Market Data",
                     color=discord.Color.blue()  # Blue for informational
                 )
@@ -354,7 +337,7 @@ class OptionsBot(commands.Bot):
                 await message.channel.send(embed=embed)
             elif no_activity and not has_whale_emoji:
                 # No unusual activity detected
-                embed = self.create_styled_embed(
+                embed = discord.Embed(
                     title=f"📊 {parsed['ticker']} No Unusual Activity",
                     color=discord.Color.light_gray()  # Grey for neutral
                 )
@@ -433,7 +416,7 @@ class OptionsBot(commands.Bot):
                         embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
                 
                 # Format response as Discord embed with whale emoji
-                embed = self.create_styled_embed(
+                embed = discord.Embed(
                     title=f"🐳 {parsed['ticker']} Unusual Options Activity 🐳",
                     color=embed_color
                 )
@@ -488,7 +471,7 @@ class OptionsBot(commands.Bot):
         
         if using_fallback:
             # Data is limited due to API restrictions
-            embed = self.create_styled_embed(
+            embed = discord.Embed(
                 title=f"📊 {parsed['ticker']} Market Data",
                 color=discord.Color.blue()  # Blue for informational
             )
@@ -506,7 +489,7 @@ class OptionsBot(commands.Bot):
             
         elif no_activity and not has_whale_emoji:
             # No unusual activity detected
-            embed = self.create_styled_embed(
+            embed = discord.Embed(
                 title=f"📊 {parsed['ticker']} No Unusual Activity",
                 color=discord.Color.light_gray()  # Grey for neutral
             )
@@ -583,7 +566,7 @@ class OptionsBot(commands.Bot):
                     embed_color = discord.Color.light_gray()  # Grey for neutral or mixed
             
             # Format response as Discord embed with whale emoji
-            embed = self.create_styled_embed(
+            embed = discord.Embed(
                 title=f"🐳 {parsed['ticker']} Unusual Options Activity (Calls & Puts) 🐳",
                 color=embed_color
             )
