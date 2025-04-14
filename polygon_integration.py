@@ -1076,32 +1076,24 @@ def get_simplified_unusual_activity_summary(ticker):
             if not expiry_date and len(contract_parts) >= 3:
                 expiry_date = contract_parts[2]
                 
-            # Start the summary with integrated timestamp
-            if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish bet that\n"
-                summary += f"occurred at {timestamp_str} with "
-            else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
-                summary += f"bet with "
+            # Start the summary with integrated timestamp - no bet wording, no occurred at
+            summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
                 
-            # Add strike price and expiration
-            if len(contract_parts) >= 3:
-                # If we have a properly parsed expiration date
-                if expiry_date:
-                    summary += f"in-the-money (${contract_parts[1]}) options expiring {expiry_date}.\n\n"
-                else:
-                    # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${contract_parts[1]}) options expiring soon.\n\n"
+            # Format with the proper in-the-money and strike price
+            if strike_price:
+                summary += f"in-the-money ({strike_price}) options "
             else:
-                summary += f"options from the largest unusual activity.\n\n"
+                summary += f"options "
+                
+            # Add expiration date and purchase date
+            if expiry_date:
+                summary += f"expiring {expiry_date}, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+            else:
+                summary += f"expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
         except (IndexError, AttributeError):
-            # If we couldn't parse the contract but have a timestamp
-            if timestamp_str:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish bet that\n"
-                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
-            else:
-                summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bullish\n"
-                summary += f"bet with options from the largest unusual activity.\n\n"
+            # Formatted error fallback without bet wording
+            summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
+            summary += f"options expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
         
         # Safely calculate the ratio
         if bearish_count > 0:
@@ -1161,32 +1153,24 @@ def get_simplified_unusual_activity_summary(ticker):
             if not expiry_date and len(contract_parts) >= 3:
                 expiry_date = contract_parts[2]
                 
-            # Start the summary with integrated timestamp
-            if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish bet that\n"
-                summary += f"occurred at {timestamp_str} with "
-            else:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
-                summary += f"bet with "
+            # Start the summary with integrated timestamp - no bet wording, no occurred at
+            summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
                 
-            # Add strike price and expiration
-            if len(contract_parts) >= 3:
-                # If we have a properly parsed expiration date
-                if expiry_date:
-                    summary += f"in-the-money (${contract_parts[1]}) options expiring {expiry_date}.\n\n"
-                else:
-                    # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money (${contract_parts[1]}) options expiring soon.\n\n"
+            # Format with the proper in-the-money and strike price
+            if strike_price:
+                summary += f"in-the-money ({strike_price}) options "
             else:
-                summary += f"options from the largest unusual activity.\n\n"
+                summary += f"options "
+                
+            # Add expiration date and purchase date
+            if expiry_date:
+                summary += f"expiring {expiry_date}, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
+            else:
+                summary += f"expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
         except (IndexError, AttributeError):
-            # If we couldn't parse the contract but have a timestamp
-            if timestamp_str:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish bet that\n"
-                summary += f"occurred at {timestamp_str} with options from the largest unusual activity.\n\n"
-            else:
-                summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a ${premium_in_millions:.1f} million bearish\n"
-                summary += f"bet with options from the largest unusual activity.\n\n"
+            # Formatted error fallback without bet wording
+            summary += f"• I'm seeing strongly bearish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bearish** "
+            summary += f"options expiring soon, purchased {datetime.now().strftime('%m/%d/%y')}.\n\n"
         
         # Safely calculate the ratio
         if bullish_count > 0:
