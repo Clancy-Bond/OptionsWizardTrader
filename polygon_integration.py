@@ -763,7 +763,26 @@ def get_unusual_options_activity(ticker):
         return None
     
     ticker = ticker.upper()
-    today = datetime.now().strftime('%Y-%m-%d')
+    current_time = datetime.now()
+    today = current_time.strftime('%Y-%m-%d')
+    
+    # Check if we have cached data for this ticker that's still valid (less than 5 minutes old)
+    if ticker in unusual_activity_cache:
+        cache_entry = unusual_activity_cache[ticker]
+        cache_age = (current_time - cache_entry["timestamp"]).total_seconds()
+        
+        # If cache is less than 5 minutes old (300 seconds), use it
+        if cache_age < 300:
+            print(f"Using cached unusual activity data for {ticker} ({cache_age:.1f} seconds old)")
+            # Add more detailed debug info about what's in the cache
+            cached_data = cache_entry["data"]
+            if cached_data:
+                print(f"DEBUG: Cache contains {len(cached_data)} items")
+            else:
+                print(f"DEBUG: Cache contains empty or None data")
+            return cached_data
+        else:
+            print(f"Cached data for {ticker} is stale ({cache_age:.1f} seconds old), refreshing...")
     
     try:
         # Get options for today's date
@@ -898,20 +917,45 @@ def get_unusual_options_activity(ticker):
         # No fallback to Yahoo Finance - only using Polygon.io data as requested
         if forbidden_error_count > 5 and len(unusual_activity) == 0:
             print(f"Too many 403 errors for {ticker}, but not falling back to Yahoo Finance as requested")
+            # Cache empty results to prevent repeated API calls that will fail
+            empty_result = []
+            unusual_activity_cache[ticker] = {
+                "timestamp": datetime.now(),
+                "data": empty_result
+            }
+            print(f"Cached empty result for {ticker} due to API errors (will expire in 5 minutes)")
             # Return empty list to indicate no unusual activity found
-            return []
+            return empty_result
         
         # Sort by unusualness score in descending order, with premium as a secondary factor
         unusual_activity.sort(key=lambda x: (x.get('unusualness_score', 0), x.get('premium', 0)), reverse=True)
         
         # Take top 5 (if we have that many)
-        return unusual_activity[:5]
+        result = unusual_activity[:5]
+        
+        # Store in cache with current timestamp
+        unusual_activity_cache[ticker] = {
+            "timestamp": datetime.now(),
+            "data": result
+        }
+        
+        print(f"Cached unusual activity data for {ticker} (will expire in 5 minutes)")
+        return result
         
     except Exception as e:
         print(f"Error fetching unusual activity for {ticker}: {str(e)}")
         # No fallback to Yahoo Finance - only using Polygon.io data as requested
         print(f"Not falling back to Yahoo Finance for {ticker} unusual options activity as requested")
-        return None
+        
+        # Cache error results to prevent repeated API calls that will fail
+        empty_result = None
+        unusual_activity_cache[ticker] = {
+            "timestamp": datetime.now(),
+            "data": empty_result
+        }
+        print(f"Cached error result for {ticker} (will expire in 5 minutes)")
+        
+        return empty_result
 
 
 def extract_strike_from_symbol(symbol):
@@ -948,6 +992,15 @@ def get_simplified_unusual_activity_summary(ticker):
         return "Please specify a valid ticker symbol."
     
     print(f"Using Polygon.io data for unusual activity summary for {ticker}")
+    
+    # Check if we have ticker in cache before calling the function
+    if ticker in unusual_activity_cache:
+        cache_entry = unusual_activity_cache[ticker]
+        cache_age = (datetime.now() - cache_entry["timestamp"]).total_seconds()
+        print(f"DEBUG: Cache check before API call - {ticker} in cache, age: {cache_age:.1f} seconds")
+    else:
+        print(f"DEBUG: Cache check before API call - {ticker} not in cache")
+        
     activity = get_unusual_options_activity(ticker)
     
     if not activity or len(activity) == 0:
