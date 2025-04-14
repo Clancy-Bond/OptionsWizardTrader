@@ -10,6 +10,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from polygon_trades import get_option_trade_data
 import math
+import cache_module
 
 # Load environment variables
 load_dotenv()
@@ -918,10 +919,7 @@ def get_unusual_options_activity(ticker):
         result = unusual_activity[:5]
         
         # Store in cache with current timestamp
-        unusual_activity_cache[ticker] = {
-            "timestamp": datetime.now(),
-            "data": result
-        }
+        cache_module.add_to_cache(ticker, result)
         
         print(f"Cached unusual activity data for {ticker} (will expire in 5 minutes)")
         return result
@@ -933,10 +931,7 @@ def get_unusual_options_activity(ticker):
         
         # Cache error results to prevent repeated API calls that will fail
         empty_result = None
-        unusual_activity_cache[ticker] = {
-            "timestamp": datetime.now(),
-            "data": empty_result
-        }
+        cache_module.add_to_cache(ticker, empty_result)
         print(f"Cached error result for {ticker} (will expire in 5 minutes)")
         
         return empty_result
@@ -978,12 +973,7 @@ def get_simplified_unusual_activity_summary(ticker):
     print(f"Using Polygon.io data for unusual activity summary for {ticker}")
     
     # Check if we have ticker in cache before calling the function
-    if ticker in unusual_activity_cache:
-        cache_entry = unusual_activity_cache[ticker]
-        cache_age = (datetime.now() - cache_entry["timestamp"]).total_seconds()
-        print(f"DEBUG: Cache check before API call - {ticker} in cache, age: {cache_age:.1f} seconds")
-    else:
-        print(f"DEBUG: Cache check before API call - {ticker} not in cache")
+    print(f"DEBUG: Cache check before API call - {ticker} {'in' if cache_module.cache_contains(ticker) else 'not in'} cache")
         
     activity = get_unusual_options_activity(ticker)
     

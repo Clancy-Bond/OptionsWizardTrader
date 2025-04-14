@@ -1,54 +1,43 @@
-import polygon_integration
-import time
-from datetime import datetime
+import datetime
+import cache_module
+from polygon_integration import get_unusual_options_activity, extract_strike_from_symbol
 
 def test_basic_caching():
     """Basic test of caching functionality"""
-    print("Cache before anything:", polygon_integration.unusual_activity_cache)
     
-    # Create a mock entry in the cache
-    ticker = "TEST"
-    polygon_integration.unusual_activity_cache[ticker] = {
-        "timestamp": datetime.now(),  # Use datetime object, not timestamp
-        "data": ["mock data"]
-    }
+    test_ticker = "AAPL"
     
-    print("\nCache after adding mock entry:", polygon_integration.unusual_activity_cache)
+    print(f"Testing cache for {test_ticker}")
     
-    # Check if get_unusual_options_activity would use the cache
-    if ticker in polygon_integration.unusual_activity_cache:
-        cache_entry = polygon_integration.unusual_activity_cache[ticker]
-        cache_age = (datetime.now() - cache_entry["timestamp"]).total_seconds()
-        if cache_age < 300:  # 5 minutes in seconds
-            print(f"Cache for {ticker} would be used (age: {cache_age:.1f} seconds)")
-        else:
-            print(f"Cache for {ticker} would be refreshed (age: {cache_age:.1f} seconds)")
+    # Check if ticker is already in cache
+    if cache_module.cache_contains(test_ticker):
+        print(f"{test_ticker} already in cache")
+        cached_data, found = cache_module.get_from_cache(test_ticker)
+        print(f"Found in cache: {found}")
+        if found:
+            print(f"Cache contains {len(cached_data) if cached_data else 0} items")
+    else:
+        print(f"{test_ticker} not in cache, making API call")
     
-    # Now try getting it - we'll create a minimal mock function to test this
-    original_func = polygon_integration.get_option_chain
-    try:
-        # Replace the actual function with a mock
-        def mock_option_chain(ticker):
-            print(f"Mock option chain called for {ticker}")
-            return []
-        
-        polygon_integration.get_option_chain = mock_option_chain
-        
-        print(f"\nGet unusual activity for {ticker} (should use cache)...")
-        result = polygon_integration.get_unusual_options_activity(ticker)
-        print(f"Result: {result}")
-        
-        # Try a different ticker (should try to call the API)
-        different_ticker = "DIFFERENT"
-        print(f"\nGet unusual activity for {different_ticker} (should try API)...")
-        result = polygon_integration.get_unusual_options_activity(different_ticker)
-        print(f"Result: {result}")
-        
-    finally:
-        # Restore the original function
-        polygon_integration.get_option_chain = original_func
+    # Make first API call (or use cache if available)
+    unusual_activity = get_unusual_options_activity(test_ticker)
     
-    print("\nFinal cache state:", polygon_integration.unusual_activity_cache)
+    # Check cache status after first call
+    if cache_module.cache_contains(test_ticker):
+        print(f"{test_ticker} successfully cached after first call")
+    else:
+        print(f"ERROR: {test_ticker} not cached after first call")
+    
+    # Test strike extraction
+    symbol = "O:AAPL250417C00195000"
+    strike = extract_strike_from_symbol(symbol)
+    print(f"Extracted strike from {symbol}: {strike}")
+    
+    # Test cache expiration
+    print("\nTesting cache expiration...")
+    print("Cache should expire items after 5 minutes")
+    print("Current cache contents:")
+    cache_module.print_cache_contents()
 
 if __name__ == "__main__":
     test_basic_caching()
