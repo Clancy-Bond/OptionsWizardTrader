@@ -451,11 +451,15 @@ class OptionsBot(commands.Bot):
         
         # Run the intensive operation in a separate thread to prevent blocking the bot
         loop = asyncio.get_event_loop()
-        response_text = await loop.run_in_executor(
-            None,
-            unusual_activity.get_simplified_unusual_activity_summary,
-            parsed['ticker']
-        )
+        try:
+            response_text = await loop.run_in_executor(
+                None,
+                unusual_activity.get_simplified_unusual_activity_summary,
+                parsed['ticker']
+            )
+        except Exception as e:
+            print(f"Error with Polygon unusual activity summary: {str(e)}")
+            response_text = f"📊 Unable to retrieve unusual options activity for {parsed['ticker']} from Polygon.io.\nError: {str(e)}"
         
         # Delete the processing message once we have the results
         try:
