@@ -1031,6 +1031,22 @@ def get_simplified_unusual_activity_summary(ticker):
             main_contract = next((item for item in activity if item.get('sentiment') == 'bullish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
 
+            # Extract the real strike price from option data
+            strike_price = None
+            if 'symbol' in main_contract:
+                strike_price = extract_strike_from_symbol(main_contract['symbol'])
+            if not strike_price and 'strike' in main_contract:
+                try:
+                    strike_price = f"{float(main_contract['strike']):.2f}"
+                except (ValueError, TypeError):
+                    pass
+            if not strike_price and len(contract_parts) >= 2:
+                try:
+                    if contract_parts[1].replace('.', '', 1).isdigit():
+                        strike_price = f"{float(contract_parts[1]):.2f}"
+                except (ValueError, IndexError):
+                    pass
+        
             # Extract the real strike price from the option symbol or other sources
             strike_price = None
             if 'symbol' in main_contract:
@@ -1100,6 +1116,22 @@ def get_simplified_unusual_activity_summary(ticker):
             main_contract = next((item for item in activity if item.get('sentiment') == 'bearish'), activity[0])
             contract_parts = main_contract.get('contract', '').split()
 
+            # Extract the real strike price from option data
+            strike_price = None
+            if 'symbol' in main_contract:
+                strike_price = extract_strike_from_symbol(main_contract['symbol'])
+            if not strike_price and 'strike' in main_contract:
+                try:
+                    strike_price = f"{float(main_contract['strike']):.2f}"
+                except (ValueError, TypeError):
+                    pass
+            if not strike_price and len(contract_parts) >= 2:
+                try:
+                    if contract_parts[1].replace('.', '', 1).isdigit():
+                        strike_price = f"{float(contract_parts[1]):.2f}"
+                except (ValueError, IndexError):
+                    pass
+        
             # Extract the real strike price from the option symbol or other sources
             strike_price = None
             if 'symbol' in main_contract:
