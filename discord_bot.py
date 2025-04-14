@@ -440,6 +440,10 @@ class OptionsBot(commands.Bot):
                     
                 embed.description = description
                 
+                # Add footer with API info and timestamp
+                embed.set_footer(text="Using Polygon.io market data")
+                embed.timestamp = datetime.now()
+                
                 # Send the embed message
                 await message.channel.send(embed=embed)
         except Exception as e:
@@ -589,6 +593,10 @@ class OptionsBot(commands.Bot):
                 description = response_text
                 
             embed.description = description
+            
+            # Add footer with API info and timestamp
+            embed.set_footer(text="Using Polygon.io market data")
+            embed.timestamp = datetime.now()
             
         # Send the embed message
         await message.channel.send(embed=embed)
