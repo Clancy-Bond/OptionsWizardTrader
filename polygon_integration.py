@@ -777,6 +777,34 @@ def calculate_unusualness_score(option, trades, stock_price, option_data=None):
     return final_score, score_breakdown
 
 
+def determine_moneyness(strike_price, stock_price, option_type):
+    """
+    Determine if an option is in-the-money or out-of-the-money
+    
+    Args:
+        strike_price: Option strike price (as float or string)
+        stock_price: Current stock price
+        option_type: 'call' or 'put'
+        
+    Returns:
+        String: 'in-the-money' or 'out-of-the-money'
+    """
+    try:
+        # Convert strike price to float if it's a string
+        if isinstance(strike_price, str):
+            strike_price = float(strike_price)
+            
+        # For call options: in-the-money if strike < stock price
+        if option_type.lower() == 'call':
+            return 'in-the-money' if strike_price < stock_price else 'out-of-the-money'
+        # For put options: in-the-money if strike > stock price
+        elif option_type.lower() == 'put':
+            return 'in-the-money' if strike_price > stock_price else 'out-of-the-money'
+        else:
+            return 'in-the-money'  # Default to in-the-money if we can't determine
+    except (ValueError, TypeError):
+        return 'in-the-money'  # Default to in-the-money if conversion fails
+
 def get_unusual_options_activity(ticker):
     """
     Get unusual options activity for a ticker based on volume spikes
@@ -1418,7 +1446,6 @@ def get_simplified_unusual_activity_summary(ticker):
                             moneyness = "in-the-money"  # Default if we can't determine
                         summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}."
 
-"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
                     # Try to determine moneyness for soon-expiring options
@@ -1429,7 +1456,6 @@ def get_simplified_unusual_activity_summary(ticker):
                         moneyness = "in-the-money"  # Default if we can't determine
                     summary += f"{moneyness} ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}."
 
-"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
@@ -1495,7 +1521,6 @@ def get_simplified_unusual_activity_summary(ticker):
                             moneyness = determine_moneyness(strike_price, stock_price, 'put')
                             summary += f"{moneyness} ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}."
 
-"
                         else:
                             # Try to determine moneyness from contract parts
                             try:
@@ -1505,7 +1530,6 @@ def get_simplified_unusual_activity_summary(ticker):
                                 moneyness = "in-the-money"  # Default if we can't determine
                             summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}."
 
-"
                     else:
                         # Try to determine moneyness from contract parts
                         try:
@@ -1515,7 +1539,6 @@ def get_simplified_unusual_activity_summary(ticker):
                             moneyness = "in-the-money"  # Default if we can't determine
                         summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}."
 
-"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
                     # Try to determine moneyness for soon-expiring options
@@ -1526,7 +1549,6 @@ def get_simplified_unusual_activity_summary(ticker):
                         moneyness = "in-the-money"  # Default if we can't determine
                     summary += f"{moneyness} ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}."
 
-"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
