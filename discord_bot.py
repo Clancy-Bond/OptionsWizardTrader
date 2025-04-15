@@ -73,8 +73,6 @@ class OptionsBotNLP:
         # Detect basic intents
         if any(phrase in query for phrase in ['PRICE', 'ESTIMATE', 'CALCULATE', 'WORTH', 'VALUE']):
             result['intent'] = 'price'
-        elif any(phrase in query for phrase in ['STOP LOSS', 'STOP-LOSS', 'STOPLOSS']):
-            result['intent'] = 'stop_loss'
         elif any(phrase in query for phrase in ['UNUSUAL', 'ACTIVITY', 'VOLUME', 'FLOW']):
             result['intent'] = 'unusual_activity'
             # Check if query is asking for both call and put unusual activity
@@ -173,8 +171,6 @@ class OptionsBot(commands.Bot):
         # Handle different intents
         if parsed['intent'] == 'price' and parsed['ticker']:
             await self.handle_price_request(message, parsed)
-        elif parsed['intent'] == 'stop_loss' and parsed['ticker']:
-            await self.handle_stop_loss_request(message, parsed)
         elif parsed['intent'] == 'unusual_activity' and parsed['ticker']:
             await self.handle_unusual_activity_request(message, parsed)
         elif parsed['intent'] == 'unusual_activity_both' and parsed['ticker']:
