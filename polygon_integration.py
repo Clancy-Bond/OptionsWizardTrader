@@ -663,25 +663,41 @@ def calculate_unusualness_score(option, trades, stock_price, option_data=None):
     score += block_trade_score
     score_breakdown['block_trade'] = block_trade_score
     
-    # 2. Volume to Open Interest Ratio (0-25 points)
+    # 2. Volume to Open Interest Ratio (0-20 points)
     total_volume = sum(t.get('size', 0) for t in trades)
     
     vol_oi_score = 0
     if open_interest > 0:
         vol_oi_ratio = total_volume / open_interest
         if vol_oi_ratio >= 1.0:  # Volume exceeds open interest
-            vol_oi_score = 25
-        elif vol_oi_ratio >= 0.5:
             vol_oi_score = 20
-        elif vol_oi_ratio >= 0.3:
+        elif vol_oi_ratio >= 0.5:
             vol_oi_score = 15
-        elif vol_oi_ratio >= 0.2:
+        elif vol_oi_ratio >= 0.3:
             vol_oi_score = 10
-        elif vol_oi_ratio >= 0.1:
+        elif vol_oi_ratio >= 0.2:
             vol_oi_score = 5
+        elif vol_oi_ratio >= 0.1:
+            vol_oi_score = 3
+    elif total_volume > 20:
+        # Even without open interest data, high absolute volume is notable
+        vol_oi_score = 10
     
     score += vol_oi_score
     score_breakdown['volume_to_oi'] = vol_oi_score
+    
+    # NEW: Open Interest Size (0-15 points)
+    # Options with significant open interest are more meaningful when they show unusual activity
+    oi_size_score = 0
+    if open_interest >= 1000:
+        oi_size_score = 15  # Very high open interest
+    elif open_interest >= 500:
+        oi_size_score = 10
+    elif open_interest >= 100:
+        oi_size_score = 5
+    
+    score += oi_size_score
+    score_breakdown['open_interest_size'] = oi_size_score
     
     # 3. Strike Price Distance (0-15 points)
     # How far is the strike from current price
@@ -793,24 +809,45 @@ def get_unusual_options_activity(ticker):
         forbidden_error_count = 0
         processed_options = 0
         
-        # Filter options to only those that are near the money (within 10%)
+        # Filter options to include more strikes (25% from current price) and minimum open interest
         near_money_options = []
+        total_options = len(chain) if chain else 0
+        filtered_by_strike = 0
+        filtered_by_interest = 0
+        
         if stock_price:
             for option in chain:
                 option_symbol = option.get('ticker')
                 strike = option.get('strike_price')
                 expiry = option.get('expiration_date')
                 contract_type = option.get('contract_type', '').lower()
+                open_interest = option.get('open_interest', 0)
                 
                 # Skip if missing key info
                 if not option_symbol or not strike or not expiry or not contract_type:
                     continue
                 
-                # Check if near the money
-                if abs(strike - stock_price) / stock_price <= 0.1:
-                    near_money_options.append(option)
+                # Check if within expanded range (25% of current price)
+                price_filter = abs(strike - stock_price) / stock_price <= 0.25
+                
+                if not price_filter:
+                    filtered_by_strike += 1
+                    continue
+                
+                # Check if option has minimum open interest (at least 5 contracts)
+                # This screens out completely illiquid options
+                interest_filter = open_interest >= 5
+                
+                if not interest_filter:
+                    filtered_by_interest += 1
+                    continue
+                
+                # Only include options that meet both criteria
+                near_money_options.append(option)
         
-        print(f"Found {len(near_money_options)} near-the-money options to analyze")
+        print(f"Found {len(near_money_options)} options to analyze (within 25% of price and min. open interest)")
+        print(f"Filtered out {filtered_by_strike} options outside price range and {filtered_by_interest} with insufficient open interest")
+        print(f"Total options in chain: {total_options}")
         
         # No longer limiting the number of options - analyze all near-the-money options
         # Sort by proximity to current price for better analysis in the output
