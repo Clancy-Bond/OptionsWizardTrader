@@ -812,13 +812,9 @@ def get_unusual_options_activity(ticker):
         
         print(f"Found {len(near_money_options)} near-the-money options to analyze")
         
-        # Set a reasonable limit to prevent timeouts
-        max_options_to_process = 50
-        if len(near_money_options) > max_options_to_process:
-            print(f"Limiting analysis to {max_options_to_process} options")
-            # Sort by proximity to current price for better analysis
-            near_money_options.sort(key=lambda x: abs(x.get('strike_price', 0) - stock_price))
-            near_money_options = near_money_options[:max_options_to_process]
+        # No longer limiting the number of options - analyze all near-the-money options
+        # Sort by proximity to current price for better analysis in the output
+        near_money_options.sort(key=lambda x: abs(x.get('strike_price', 0) - stock_price))
         
         # Look for unusual volume and premium patterns
         for option in near_money_options:
