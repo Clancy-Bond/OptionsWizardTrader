@@ -834,9 +834,9 @@ def get_unusual_options_activity(ticker):
                     filtered_by_strike += 1
                     continue
                 
-                # Include all options regardless of open interest for now
-                # Later we can make this configurable
-                interest_filter = True
+                # Check if option has minimum open interest (at least 10 contracts)
+                # This balances data quality with processing performance
+                interest_filter = open_interest >= 10
                 
                 if not interest_filter:
                     filtered_by_interest += 1
