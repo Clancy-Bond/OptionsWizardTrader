@@ -1234,6 +1234,46 @@ def extract_strike_from_symbol(symbol):
         return None
     except (ValueError, IndexError):
         return None
+        
+def is_option_in_the_money(symbol, strike_price, current_price):
+    """
+    Determine if an option is in-the-money based on its symbol, strike price, and current stock price
+    
+    Args:
+        symbol: Option symbol (to determine if it's a call or put)
+        strike_price: Strike price of the option
+        current_price: Current price of the underlying stock
+        
+    Returns:
+        bool: True if the option is in-the-money, False otherwise
+        str: 'call' or 'put' indicating the option type
+    """
+    try:
+        # Convert strike_price to float if it's a string
+        if isinstance(strike_price, str):
+            # Remove any $ or commas
+            strike_price = float(strike_price.replace('$', '').replace(',', ''))
+        
+        # Determine if it's a call or put based on the symbol
+        option_type = None
+        if symbol:
+            if 'C' in symbol:
+                option_type = 'call'
+            elif 'P' in symbol:
+                option_type = 'put'
+        
+        # If we couldn't determine the option type from the symbol, try to use the sentiment
+        if not option_type:
+            return False, None
+        
+        # Determine if in-the-money
+        if option_type == 'call':
+            return current_price > strike_price, option_type
+        else:  # put
+            return current_price < strike_price, option_type
+    except Exception as e:
+        print(f"Error determining if option is in-the-money: {str(e)}")
+        return False, None
 
 def get_simplified_unusual_activity_summary(ticker):
     """
