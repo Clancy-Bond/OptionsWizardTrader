@@ -1495,7 +1495,7 @@ def get_simplified_unusual_activity_summary(ticker):
     
     # Add overall flow percentages (based on ALL options contracts analyzed, not just unusual ones)
     total_analyzed_contracts = all_bullish_count + all_bearish_count
-    summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish (based on {total_analyzed_contracts} analyzed option contracts)"
+    summary += f"• Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish (based on {total_analyzed_contracts} analyzed option contracts)"
     
     # Add institutional sentiment analysis if available
     if isinstance(result_with_metadata, dict) and 'institutional_summary' in result_with_metadata:
