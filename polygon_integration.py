@@ -902,6 +902,17 @@ def get_unusual_options_activity(ticker):
                     if 'timestamp_human' in trade_info:
                         option_entry['timestamp_human'] = trade_info['timestamp_human']
                 
+                # Make sure volume is always available
+                if 'volume' not in option_entry:
+                    option_entry['volume'] = 0
+                    
+                # If we have trade info, use the actual trade size for volume calculation
+                if trade_info and 'size' in trade_info and trade_info['size'] > 0:
+                    option_entry['contract_volume'] = trade_info['size']
+                else:
+                    # Fallback to 1 (minimum) if no significant trades found
+                    option_entry['contract_volume'] = 1
+                
                 # Add to ALL options analyzed list (regardless of unusualness score)
                 all_options.append(option_entry)
                 
@@ -916,8 +927,8 @@ def get_unusual_options_activity(ticker):
             
             # Even with errors, store sentiment counts from any options analyzed
             if len(all_options) > 0:
-                all_bullish_count = sum(1 for item in all_options if item.get('sentiment') == 'bullish')
-                all_bearish_count = sum(1 for item in all_options if item.get('sentiment') == 'bearish')
+                all_bullish_count = sum(item.get('contract_volume', 1) for item in all_options if item.get('sentiment') == 'bullish')
+                all_bearish_count = sum(item.get('contract_volume', 1) for item in all_options if item.get('sentiment') == 'bearish')
                 empty_result = {
                     'unusual_options': [],
                     'total_bullish_count': all_bullish_count,
@@ -939,12 +950,17 @@ def get_unusual_options_activity(ticker):
         
         # Calculate sentiment counts from ALL options analyzed (not just unusual ones)
         # This gives a more comprehensive view of market sentiment
-        all_bullish_count = sum(1 for item in all_options if item.get('sentiment') == 'bullish')
-        all_bearish_count = sum(1 for item in all_options if item.get('sentiment') == 'bearish')
+        # Use contract volume to weight the sentiment counts
+        all_bullish_count = sum(item.get('contract_volume', 1) for item in all_options if item.get('sentiment') == 'bullish')
+        all_bearish_count = sum(item.get('contract_volume', 1) for item in all_options if item.get('sentiment') == 'bearish')
         
         # Print detailed breakdown of all options analyzed
         print(f"COMPLETE BREAKDOWN OF ALL OPTIONS: {len(all_options)} total options analyzed")
-        print(f"Total sentiment counts from ALL options: {all_bullish_count} bullish ({all_bullish_count/len(all_options)*100:.1f}%) / {all_bearish_count} bearish ({all_bearish_count/len(all_options)*100:.1f}%)")
+        all_total_contracts = all_bullish_count + all_bearish_count
+        # Calculate volume-weighted percentages
+        bullish_pct = (all_bullish_count / all_total_contracts * 100) if all_total_contracts > 0 else 0
+        bearish_pct = (all_bearish_count / all_total_contracts * 100) if all_total_contracts > 0 else 0
+        print(f"Volume-weighted sentiment: {all_bullish_count} bullish contracts ({bullish_pct:.1f}%) / {all_bearish_count} bearish contracts ({bearish_pct:.1f}%)")
         
         # Also print breakdown of just the unusual options for comparison
         unusual_bullish = sum(1 for item in unusual_activity if item.get('sentiment') == 'bullish')
@@ -1051,8 +1067,9 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         # Handle case where the old format is still in the cache
         activity = result_with_metadata
-        all_bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
-        all_bearish_count = sum(1 for item in activity if item.get('sentiment') == 'bearish')
+        # Use contract volume if available, otherwise count each option as 1
+        all_bullish_count = sum(item.get('contract_volume', 1) for item in activity if item.get('sentiment') == 'bullish')
+        all_bearish_count = sum(item.get('contract_volume', 1) for item in activity if item.get('sentiment') == 'bearish')
     
     if not activity:
         return f"📊 No significant unusual options activity detected for {ticker} in Polygon.io data.\n\nThis could indicate normal trading patterns or low options volume."
@@ -1270,8 +1287,8 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
     
-    # Add overall flow percentages (based on ALL options analyzed, not just unusual ones)
-    total_analyzed = all_bullish_count + all_bearish_count
-    summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish (based on {total_analyzed} analyzed options)"
+    # Add overall flow percentages (based on ALL options contracts analyzed, not just unusual ones)
+    total_analyzed_contracts = all_bullish_count + all_bearish_count
+    summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish (based on {total_analyzed_contracts} analyzed option contracts)"
     
     return summary
