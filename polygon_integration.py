@@ -766,11 +766,14 @@ def get_unusual_options_activity(ticker):
     current_time = datetime.now()
     today = current_time.strftime('%Y-%m-%d')
     
-    # Check if we have cached data for this ticker that's still valid (less than 5 minutes old)
+    # Check if we have cached data for this ticker that's still valid
     print(f"DEBUG: Cache check before API call - {ticker} {'in' if cache_module.cache_contains(ticker) else 'not in'} cache")
+    cache_module.print_cache_contents()  # Debug: print all cache contents
     cached_data, found = cache_module.get_from_cache(ticker)
     if found:
+        print(f"DEBUG: Using cached data for {ticker} with {len(cached_data) if cached_data else 0} items")
         return cached_data
+    print(f"DEBUG: Cache miss for {ticker}, fetching fresh data from API")
     
     try:
         # Get options for today's date

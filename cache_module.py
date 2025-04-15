@@ -5,13 +5,43 @@ All caches that need to persist across multiple function calls should be stored 
 The cache implements a market-hours aware expiration strategy:
 - During market hours (9:30am-4:15pm ET, weekdays): 5-minute expiration
 - Outside market hours and on weekends: no expiration until next market open
+
+This module stores the cache in memory but also persists it to disk to make it available
+across different processes and restart instances.
 """
 from datetime import datetime, time, timedelta
 import pytz
+import json
+import os
+import pickle
 
 # Dictionary to store unusual options activity cache with timestamps
 # Format: {ticker: {"timestamp": datetime, "data": activity_data}}
 unusual_activity_cache = {}
+
+# Path to persist the cache to
+CACHE_FILE = 'option_wizard_cache.pickle'
+
+# Load cache from disk if it exists
+def load_cache():
+    global unusual_activity_cache
+    try:
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, 'rb') as f:
+                loaded_cache = pickle.load(f)
+                unusual_activity_cache = loaded_cache
+                print(f"Loaded {len(unusual_activity_cache)} items from cache file")
+                # Print cache contents for debugging
+                print_cache_contents()
+        else:
+            print("No cache file found, starting with empty cache")
+    except Exception as e:
+        print(f"Error loading cache: {str(e)}")
+        # If there's an error loading the cache, start with an empty one
+        unusual_activity_cache = {}
+
+# Initialize by loading the cache
+load_cache()
 
 def is_market_open():
     """
@@ -126,6 +156,15 @@ def should_use_cached_data(cache_timestamp):
     cache_age = (now - cache_timestamp).total_seconds()
     return cache_age < 300
 
+def save_cache():
+    """Save the current cache to disk"""
+    try:
+        with open(CACHE_FILE, 'wb') as f:
+            pickle.dump(unusual_activity_cache, f)
+        print(f"Saved {len(unusual_activity_cache)} items to cache file")
+    except Exception as e:
+        print(f"Error saving cache: {str(e)}")
+
 def add_to_cache(ticker, data):
     """Add data to the unusual activity cache with current timestamp"""
     timestamp = datetime.now()
@@ -138,6 +177,9 @@ def add_to_cache(ticker, data):
         print(f"Added {ticker} to cache (will expire in 5 minutes)")
     else:
         print(f"Added {ticker} to cache (will persist until next market open)")
+        
+    # Save cache to disk
+    save_cache()
     
 def get_from_cache(ticker):
     """
