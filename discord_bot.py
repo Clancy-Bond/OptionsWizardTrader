@@ -254,11 +254,11 @@ class OptionsBot(commands.Bot):
             processing_msg = await message.channel.send(f"Processing unusual options activity for {parsed['ticker']}... This may take a moment.")
             
             # Use run_in_executor to run the function in a background thread
+            # Always use high-performance mode for Discord bot to ensure faster responses
             loop = asyncio.get_event_loop()
             response_text = await loop.run_in_executor(
                 None,
-                unusual_activity.get_simplified_unusual_activity_summary,
-                parsed['ticker']
+                lambda: unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'], high_performance=True)
             )
             
             # Delete the processing message once we have the results
@@ -413,8 +413,7 @@ class OptionsBot(commands.Bot):
         try:
             response_text = await loop.run_in_executor(
                 None,
-                unusual_activity.get_simplified_unusual_activity_summary,
-                parsed['ticker']
+                lambda: unusual_activity.get_simplified_unusual_activity_summary(parsed['ticker'], high_performance=True)
             )
         except Exception as e:
             print(f"Error with Polygon unusual activity summary: {str(e)}")

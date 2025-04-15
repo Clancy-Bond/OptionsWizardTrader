@@ -831,16 +831,16 @@ def get_unusual_options_activity(ticker):
         high_volume_tickers = {'AAPL', 'MSFT', 'TSLA', 'SPY', 'QQQ', 'NVDA', 'AMZN', 'GOOGL', 'META', 'AMD'}
         high_performance_mode = os.environ.get('HIGH_PERFORMANCE_MODE', 'false').lower() == 'true'
         
-        # Default: 25% of current price for regular tickers
-        price_range_multiplier = 0.25
+        # Per user request: use at least 20% price range for all tickers
+        price_range_multiplier = 0.25  # 25% is the default
         
-        # For high volume tickers or when in high performance mode, use tighter range
+        # For high volume tickers, use the minimum required range (20%)
         if ticker in high_volume_tickers:
-            price_range_multiplier = 0.15  # 15% of current price
+            price_range_multiplier = 0.20  # 20% of current price
             print(f"Using optimized price range ({price_range_multiplier*100}%) for high-volume ticker {ticker}")
         elif high_performance_mode:
-            # Even tighter for high performance mode requests
-            price_range_multiplier = 0.12  # 12% of current price 
+            # For high performance mode requests, use the minimum (20%)
+            price_range_multiplier = 0.20  # 20% of current price 
             print(f"Using high-performance price range ({price_range_multiplier*100}%) for {ticker}")
         
         if stock_price:
