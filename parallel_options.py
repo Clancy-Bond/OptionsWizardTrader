@@ -172,40 +172,39 @@ def process_single_option(option, stock_price, headers, ticker):
                 score += block_trade_score
                 score_breakdown['block_trade'] = block_trade_score
                 
-                # 2. Volume to Open Interest Ratio (0-20 points)
+                # 2. Total Volume Score (0-20 points)
+                # Note: Since Polygon.io returns 0 for open interest, we're using absolute volume scoring
                 total_volume = sum(t.get('size', 0) for t in trades)
                 
-                vol_oi_score = 0
-                if open_interest > 0:
-                    vol_oi_ratio = total_volume / open_interest
-                    if vol_oi_ratio >= 1.0:  # Volume exceeds open interest
-                        vol_oi_score = 20
-                    elif vol_oi_ratio >= 0.5:
-                        vol_oi_score = 15
-                    elif vol_oi_ratio >= 0.3:
-                        vol_oi_score = 10
-                    elif vol_oi_ratio >= 0.2:
-                        vol_oi_score = 5
-                    elif vol_oi_ratio >= 0.1:
-                        vol_oi_score = 3
-                elif total_volume > 20:
-                    # Even without open interest data, high absolute volume is notable
-                    vol_oi_score = 10
+                volume_score = 0
+                if total_volume >= 200:
+                    volume_score = 20  # Very high volume
+                elif total_volume >= 100:
+                    volume_score = 15
+                elif total_volume >= 50:
+                    volume_score = 10
+                elif total_volume >= 20:
+                    volume_score = 5
+                elif total_volume >= 10:
+                    volume_score = 3
                 
-                score += vol_oi_score
-                score_breakdown['volume_to_oi'] = vol_oi_score
+                score += volume_score
+                score_breakdown['volume_score'] = volume_score
                 
-                # NEW: Open Interest Size (0-15 points)
-                oi_size_score = 0
-                if open_interest >= 1000:
-                    oi_size_score = 15  # Very high open interest
-                elif open_interest >= 500:
-                    oi_size_score = 10
-                elif open_interest >= 100:
-                    oi_size_score = 5
+                # 3. Volume Concentration (0-15 points)
+                # Higher score when volume is concentrated in fewer trades
+                volume_concentration_score = 0
+                avg_trade_size = total_volume / len(trades) if len(trades) > 0 else 0
                 
-                score += oi_size_score
-                score_breakdown['open_interest_size'] = oi_size_score
+                if avg_trade_size >= 20:
+                    volume_concentration_score = 15  # Large average trade size
+                elif avg_trade_size >= 10:
+                    volume_concentration_score = 10
+                elif avg_trade_size >= 5:
+                    volume_concentration_score = 5
+                
+                score += volume_concentration_score
+                score_breakdown['volume_concentration'] = volume_concentration_score
                 
                 # 3. Strike Price Distance (0-15 points)
                 if stock_price > 0:
