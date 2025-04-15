@@ -119,6 +119,15 @@ def process_single_option(option, stock_price, headers, ticker):
         # Skip if no trades
         if not trades:
             return None, 0, False, None
+            
+        # Filter trades by date (only include trades after April 7th, 2025)
+        min_date = "2025-04-07"
+        trades = filter_trades_by_date(trades, min_date)
+        
+        # Skip if no trades remain after filtering
+        if not trades:
+            print(f"No trades found after {min_date} for {option_symbol}")
+            return None, 0, False, None
         
         # Get the scoring function - defined at module level to avoid circular imports
         # as we're importing it locally inside the function
@@ -183,7 +192,9 @@ def process_single_option(option, stock_price, headers, ticker):
         # Get the actual transaction date if available
         trade_info = None
         try:
-            trade_info = get_option_trade_data(option_symbol)
+            # Use the same date filter as we did for the options
+            min_date = "2025-04-07"
+            trade_info = get_option_trade_data(option_symbol, min_size=5, min_date=min_date)
             if trade_info:
                 print(f"Found {'significant' if trade_info.get('size', 0) > 0 else 'recent'} trade with size {trade_info.get('size', 0)} for {option_symbol}")
         except Exception as e:

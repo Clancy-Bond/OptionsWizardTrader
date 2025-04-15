@@ -29,13 +29,14 @@ def format_timestamp(timestamp_ns):
     # Format in ISO format (YYYY-MM-DD)
     return datetime.fromtimestamp(timestamp_sec).strftime("%Y-%m-%d")
 
-def get_option_trade_data(option_symbol, min_size=5):
+def get_option_trade_data(option_symbol, min_size=5, min_date="2025-04-07"):
     """
     Get the most recent significant trade for a specific option contract
     
     Args:
         option_symbol: Option symbol in Polygon format (O:AAPL250417C00100000)
         min_size: Minimum trade size to consider significant
+        min_date: Minimum date string in YYYY-MM-DD format (e.g., '2025-04-07')
         
     Returns:
         Dictionary with trade data including date, price, size, and exchange if available
@@ -56,9 +57,36 @@ def get_option_trade_data(option_symbol, min_size=5):
         data = response.json()
         trades = data.get('results', [])
         
-        # If there are trades available, get the most significant one
+        # If there are trades available, filter by date and get the most significant one
         if trades:
             print(f"Found {len(trades)} trades for {option_symbol}")
+            
+            # Filter trades by date if min_date is provided
+            if min_date:
+                try:
+                    min_date_obj = datetime.strptime(min_date, '%Y-%m-%d').date()
+                    filtered_trades = []
+                    
+                    for trade in trades:
+                        # Get timestamp from trade
+                        timestamp = trade.get('participant_timestamp') or trade.get('sip_timestamp')
+                        if timestamp:
+                            # Convert nanoseconds to datetime
+                            trade_date = datetime.fromtimestamp(timestamp / 1e9).date()
+                            # Include only trades on or after min_date
+                            if trade_date >= min_date_obj:
+                                filtered_trades.append(trade)
+                    
+                    trades = filtered_trades
+                    print(f"Filtered to {len(trades)} trades after {min_date}")
+                except Exception as e:
+                    print(f"Error filtering trades by date: {e}")
+            
+            # Skip if no trades after filtering
+            if not trades:
+                print(f"No trades found after {min_date} for {option_symbol}")
+                return {}
+                
             # Look for a significant trade (by size)
             significant_trade = None
             for trade in trades:
