@@ -1314,7 +1314,8 @@ def get_option_moneyness(symbol, strike_price, current_price, sentiment=None):
 
 def get_simplified_unusual_activity_summary(ticker):
     """
-    Create a simplified, conversational summary of unusual options activity
+    Create a simplified, conversational summary of unusual options activity with accurate
+    moneyness classification (in-the-money/out-of-the-money) based on current stock price
     
     Args:
         ticker: Stock ticker symbol
