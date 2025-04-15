@@ -915,14 +915,21 @@ def get_unusual_options_activity(ticker):
             # Return empty list to indicate no unusual activity found
             return empty_result
         
-        # Calculate overall market sentiment counts from all unusual activities
-        # We'll attach this to the result for accurate flow percentages
-        all_bullish_count = sum(1 for item in unusual_activity if item.get('sentiment') == 'bullish')
-        all_bearish_count = sum(1 for item in unusual_activity if item.get('sentiment') == 'bearish')
+        # Calculate sentiment counts from ALL options analyzed (not just unusual ones)
+        # This gives a more comprehensive view of market sentiment
+        all_bullish_count = sum(1 for item in all_options if item.get('sentiment') == 'bullish')
+        all_bearish_count = sum(1 for item in all_options if item.get('sentiment') == 'bearish')
         
-        # Print detailed breakdown of all unusual options (not just top 5)
-        print(f"COMPLETE BREAKDOWN OF ALL UNUSUAL OPTIONS: {len(unusual_activity)} total unusual options found")
-        print(f"Total sentiment counts: {all_bullish_count} bullish ({all_bullish_count/len(unusual_activity)*100:.1f}%) / {all_bearish_count} bearish ({all_bearish_count/len(unusual_activity)*100:.1f}%)")
+        # Print detailed breakdown of all options analyzed
+        print(f"COMPLETE BREAKDOWN OF ALL OPTIONS: {len(all_options)} total options analyzed")
+        print(f"Total sentiment counts from ALL options: {all_bullish_count} bullish ({all_bullish_count/len(all_options)*100:.1f}%) / {all_bearish_count} bearish ({all_bearish_count/len(all_options)*100:.1f}%)")
+        
+        # Also print breakdown of just the unusual options for comparison
+        unusual_bullish = sum(1 for item in unusual_activity if item.get('sentiment') == 'bullish')
+        unusual_bearish = sum(1 for item in unusual_activity if item.get('sentiment') == 'bearish')
+        print(f"UNUSUAL OPTIONS ONLY: {len(unusual_activity)} unusual options found")
+        if len(unusual_activity) > 0:
+            print(f"Unusual options sentiment: {unusual_bullish} bullish ({unusual_bullish/len(unusual_activity)*100:.1f}%) / {unusual_bearish} bearish ({unusual_bearish/len(unusual_activity)*100:.1f}%)")
         
         # Sort by unusualness score in descending order, with premium as a secondary factor
         unusual_activity.sort(key=lambda x: (x.get('unusualness_score', 0), x.get('premium', 0)), reverse=True)
@@ -936,7 +943,7 @@ def get_unusual_options_activity(ticker):
         # Take top 5 (if we have that many)
         result = unusual_activity[:5]
         
-        # Add the overall sentiment counts to the result
+        # Add the overall sentiment counts to the result (using ALL options, not just unusual ones)
         result_with_metadata = {
             'unusual_options': result,
             'total_bullish_count': all_bullish_count,
@@ -1039,7 +1046,7 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Calculate percentages for the overall flow display based on ALL unusual activity
+    # Calculate percentages for the overall flow display based on ALL options (not just unusual ones)
     all_total_volume = all_bullish_count + all_bearish_count
     bullish_pct = round((all_bullish_count / all_total_volume) * 100) if all_total_volume > 0 else 0
     bearish_pct = round((all_bearish_count / all_total_volume) * 100) if all_total_volume > 0 else 0
