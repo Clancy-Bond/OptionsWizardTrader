@@ -1418,9 +1418,9 @@ def get_simplified_unusual_activity_summary(ticker):
         
         # Safely calculate the ratio
         if bearish_count > 0:
-            summary += f"• Institutional Investors are heavily favoring call options with volume {round(bullish_count/bearish_count, 1)}x the put\nopen interest.\n\n"
+            summary += f"• Institutional Investors are favoring call options with volume {round(bullish_count/bearish_count, 1)}x the put\nopen interest.\n\n"
         else:
-            summary += f"• Institutional Investors are heavily favoring call options with dominant call volume.\n\n"
+            summary += f"• Institutional Investors are favoring call options with dominant call volume.\n\n"
             
     elif overall_sentiment == "bearish":
         # Get properly formatted expiration date
