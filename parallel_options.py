@@ -15,9 +15,9 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import requests
-from polygon_trades import get_option_trade_data
+from polygon_trades import get_option_trade_data, format_timestamp
 
 # Configuration
 MAX_WORKERS = 8  # Adjust based on your CPU cores
@@ -32,6 +32,42 @@ thread_local = threading.local()
 # Create thread-safe counters for tracking API errors
 error_lock = threading.Lock()
 forbidden_errors = 0
+
+def filter_trades_by_date(trades, min_date=None):
+    """
+    Filter trades to only include those after the specified date
+    
+    Args:
+        trades: List of trade objects from Polygon API
+        min_date: Minimum date string in YYYY-MM-DD format (e.g., '2025-04-07')
+        
+    Returns:
+        Filtered list of trades
+    """
+    if not min_date:
+        return trades
+        
+    try:
+        # Convert min_date string to datetime object
+        min_date_obj = datetime.strptime(min_date, '%Y-%m-%d').date()
+        
+        # Filter trades by timestamp
+        filtered_trades = []
+        for trade in trades:
+            # Get timestamp from trade
+            timestamp = trade.get('participant_timestamp') or trade.get('sip_timestamp')
+            if timestamp:
+                # Convert nanoseconds to datetime
+                trade_date = datetime.fromtimestamp(timestamp / 1e9).date()
+                # Include only trades on or after min_date
+                if trade_date >= min_date_obj:
+                    filtered_trades.append(trade)
+        
+        print(f"Filtered {len(trades)} trades to {len(filtered_trades)} trades after {min_date}")
+        return filtered_trades
+    except Exception as e:
+        print(f"Error filtering trades by date: {str(e)}")
+        return trades  # Return original trades if there's an error
 
 # Function to process a single option
 def process_single_option(option, stock_price, headers, ticker):
