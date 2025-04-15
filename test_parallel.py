@@ -7,10 +7,14 @@ import time
 from polygon_integration import get_headers, get_unusual_options_activity, get_current_price
 import cache_module
 
-def test_parallel_processing():
+def test_parallel_processing(force_refresh=True):
     # Clear cache to ensure a fresh run
-    cache_module.UNUSUAL_ACTIVITY_CACHE = {}
-    cache_module.save_cache()
+    if force_refresh:
+        print("Forcing fresh API call by clearing cache...")
+        # Remove the specific ticker from cache to force a fresh API call
+        if 'SPY' in cache_module.unusual_activity_cache:
+            del cache_module.unusual_activity_cache['SPY']
+        cache_module.save_cache()
     
     # Test with SPY (S&P 500 ETF) which has many options
     ticker = "SPY"

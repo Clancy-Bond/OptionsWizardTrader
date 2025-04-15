@@ -239,3 +239,22 @@ def print_cache_contents():
         valid = should_use_cached_data(timestamp)
         status = "VALID" if valid else "EXPIRED"
         print(f"  {ticker}: {age:.1f} seconds old, {data_desc} - {status}")
+        
+def remove_from_cache(ticker):
+    """
+    Remove a specific ticker from the cache
+    
+    Args:
+        ticker: Stock ticker symbol to remove
+        
+    Returns:
+        bool: True if ticker was in cache and removed, False otherwise
+    """
+    if ticker in unusual_activity_cache:
+        del unusual_activity_cache[ticker]
+        save_cache()
+        print(f"Removed {ticker} from cache")
+        return True
+    else:
+        print(f"{ticker} not found in cache")
+        return False
