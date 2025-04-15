@@ -6,6 +6,7 @@ for stock and options data retrieval.
 import os
 import requests
 import json
+import random
 from datetime import datetime
 from dotenv import load_dotenv
 from polygon_trades import get_option_trade_data
@@ -834,13 +835,13 @@ def get_unusual_options_activity(ticker):
                     filtered_by_strike += 1
                     continue
                 
-                # Temporarily disable open interest filtering for testing purposes
-                # This will show us how many options we get when not filtering by open interest
-                import random  # Import at top of file in production code
-                if random.random() < 0.05:  # Only print ~5% of options to avoid flooding logs
-                    print(f"DEBUG: Option {option.get('ticker')} - Strike: {strike_price}, Open Interest: {open_interest}")
+                # Don't filter by open interest - Polygon.io returns 0 for all options
+                # We confirmed that filtering by open interest blocks all options with our API key
+                if random.random() < 0.01:  # Only print ~1% of options to avoid flooding logs
+                    print(f"DEBUG: Option {option.get('ticker')} - Strike: {strike}, Open Interest: {open_interest}")
                     
-                # Temporarily disabled open interest filter - include all options
+                # Always include all options regardless of open interest
+                # Use other factors like trade volume for scoring instead
                 interest_filter = True
                 
                 if not interest_filter:
