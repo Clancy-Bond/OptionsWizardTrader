@@ -138,38 +138,116 @@ def process_single_option(option, stock_price, headers, ticker):
             # If that fails, define a simple scoring function as fallback
             print("Warning: Could not import calculate_unusualness_score, using simple fallback")
             def calculate_unusualness_score(option, trades, stock_price):
-                """Simple fallback scoring function"""
-                volume = sum(t.get('size', 0) for t in trades)
-                avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / volume if volume > 0 else 0
+                """Fallback scoring function mimicking the main implementation"""
+                score = 0
+                score_breakdown = {}
                 
-                # Calculate score based on volume and price
-                # Higher volume = more unusual
-                # Higher premium = more unusual
-                premium = volume * 100 * avg_price
-                
-                # Baseline score from volume
-                volume_score = min(25, int(volume / 10))
-                
-                # Premium boost (higher premium = higher score)
-                premium_score = min(25, int((premium / 1000000) * 10))
-                
-                # Strike proximity to current price
+                # Extract basic option information
                 strike = option.get('strike_price', 0)
-                proximity_pct = abs(strike - stock_price) / stock_price
-                proximity_score = min(25, int((1 - proximity_pct) * 25))
+                contract_type = option.get('contract_type', '').lower()
+                expiration_date = option.get('expiration_date', '')
+                open_interest = option.get('open_interest', 0)
                 
-                # Combine scores
-                total_score = volume_score + premium_score + proximity_score
+                # If we have no trades or basic data is missing, return 0 score
+                if not trades or not strike or not contract_type or not expiration_date:
+                    return 0, {}
                 
-                # Cap at 60
-                final_score = min(60, total_score)
+                # 1. Large Block Trades (0-25 points)
+                large_trades = [t for t in trades if t.get('size', 0) >= 10]
+                largest_trade_size = max([t.get('size', 0) for t in trades], default=0)
                 
-                # Score breakdown for explanation
-                score_breakdown = {
-                    'volume_score': volume_score,
-                    'premium_score': premium_score,
-                    'proximity_score': proximity_score,
-                }
+                # Score based on largest single trade size
+                block_trade_score = 0
+                if largest_trade_size >= 100:
+                    block_trade_score = 25  # Very large block
+                elif largest_trade_size >= 50:
+                    block_trade_score = 20
+                elif largest_trade_size >= 20:
+                    block_trade_score = 15
+                elif largest_trade_size >= 10:
+                    block_trade_score = 10
+                elif largest_trade_size >= 5:
+                    block_trade_score = 5
+                
+                score += block_trade_score
+                score_breakdown['block_trade'] = block_trade_score
+                
+                # 2. Volume to Open Interest Ratio (0-20 points)
+                total_volume = sum(t.get('size', 0) for t in trades)
+                
+                vol_oi_score = 0
+                if open_interest > 0:
+                    vol_oi_ratio = total_volume / open_interest
+                    if vol_oi_ratio >= 1.0:  # Volume exceeds open interest
+                        vol_oi_score = 20
+                    elif vol_oi_ratio >= 0.5:
+                        vol_oi_score = 15
+                    elif vol_oi_ratio >= 0.3:
+                        vol_oi_score = 10
+                    elif vol_oi_ratio >= 0.2:
+                        vol_oi_score = 5
+                    elif vol_oi_ratio >= 0.1:
+                        vol_oi_score = 3
+                elif total_volume > 20:
+                    # Even without open interest data, high absolute volume is notable
+                    vol_oi_score = 10
+                
+                score += vol_oi_score
+                score_breakdown['volume_to_oi'] = vol_oi_score
+                
+                # NEW: Open Interest Size (0-15 points)
+                oi_size_score = 0
+                if open_interest >= 1000:
+                    oi_size_score = 15  # Very high open interest
+                elif open_interest >= 500:
+                    oi_size_score = 10
+                elif open_interest >= 100:
+                    oi_size_score = 5
+                
+                score += oi_size_score
+                score_breakdown['open_interest_size'] = oi_size_score
+                
+                # 3. Strike Price Distance (0-15 points)
+                if stock_price > 0:
+                    strike_distance = abs(strike - stock_price) / stock_price
+                    
+                    strike_score = 0
+                    if strike_distance >= 0.2:  # 20%+ OTM
+                        strike_score = 15
+                    elif strike_distance >= 0.1:  # 10-20% OTM
+                        strike_score = 10
+                    elif strike_distance >= 0.05:  # 5-10% OTM
+                        strike_score = 5
+                    
+                    score += strike_score
+                    score_breakdown['strike_distance'] = strike_score
+                
+                # 4. Premium Size (0-20 points)
+                avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / total_volume if total_volume > 0 else 0
+                total_premium = total_volume * 100 * avg_price  # Each contract is 100 shares
+                
+                premium_score = 0
+                if total_premium >= 1000000:  # $1M+
+                    premium_score = 20
+                elif total_premium >= 500000:  # $500K+
+                    premium_score = 15
+                elif total_premium >= 100000:  # $100K+
+                    premium_score = 10
+                elif total_premium >= 50000:  # $50K+
+                    premium_score = 5
+                
+                score += premium_score
+                score_breakdown['premium_size'] = premium_score
+                
+                # Calculate total score (max 100)
+                final_score = min(score, 100)
+                
+                # Add basic trade information for reference
+                score_breakdown['total_volume'] = total_volume
+                score_breakdown['total_premium'] = total_premium
+                score_breakdown['largest_trade'] = largest_trade_size
+                if open_interest > 0:
+                    score_breakdown['vol_oi_ratio'] = round(total_volume / open_interest, 2)
                 
                 return final_score, score_breakdown
         

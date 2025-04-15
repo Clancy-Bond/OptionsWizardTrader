@@ -834,9 +834,9 @@ def get_unusual_options_activity(ticker):
                     filtered_by_strike += 1
                     continue
                 
-                # Check if option has minimum open interest (at least 5 contracts)
-                # This screens out completely illiquid options
-                interest_filter = open_interest >= 5
+                # Include all options regardless of open interest for now
+                # Later we can make this configurable
+                interest_filter = True
                 
                 if not interest_filter:
                     filtered_by_interest += 1
