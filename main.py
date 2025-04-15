@@ -10,7 +10,7 @@ load_dotenv()
 
 def run_discord_bot():
     """Run the Discord bot in a separate process"""
-    subprocess.Popen(["python", "discord_bot.fixed.py"])
+    subprocess.Popen(["python", "discord_bot.py"])
 
 def run_streamlit_admin():
     """Run the Streamlit admin interface"""
