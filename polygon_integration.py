@@ -787,8 +787,9 @@ def get_unusual_options_activity(ticker):
         # Get current stock price for context
         stock_price = get_current_price(ticker)
         
-        # Track potential unusual activity
+        # Track potential unusual activity and ALL options for comprehensive market sentiment
         unusual_activity = []
+        all_options = []  # Track ALL analyzed options to get a complete view of market sentiment
         forbidden_error_count = 0
         processed_options = 0
         
@@ -853,66 +854,87 @@ def get_unusual_options_activity(ticker):
                 unusualness_score, score_breakdown = calculate_unusualness_score(option, trades, stock_price)
                 print(f"Option {option_symbol} received unusualness score: {unusualness_score}")
                 
-                # Only include options with a minimum score (30 is a reasonable threshold)
-                if unusualness_score >= 30:
-                    # Calculate metrics for the activity
-                    total_volume = sum(t.get('size', 0) for t in trades)
-                    avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / total_volume if total_volume > 0 else 0
-                    total_premium = total_volume * 100 * avg_price  # Each contract is 100 shares
+                # Calculate metrics for the activity (for ALL options)
+                total_volume = sum(t.get('size', 0) for t in trades)
+                avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / total_volume if total_volume > 0 else 0
+                total_premium = total_volume * 100 * avg_price  # Each contract is 100 shares
+                
+                # Determine sentiment based on option type (for ALL options)
+                sentiment = None
+                if contract_type == 'call':
+                    sentiment = 'bullish'
+                elif contract_type == 'put':
+                    sentiment = 'bearish'
+                
+                # Get the actual transaction date if available (for ALL options)
+                # We'll use our polygon_trades module to get the most significant trade
+                trade_info = None
+                try:
+                    trade_info = get_option_trade_data(option_symbol)
+                except Exception as e:
+                    print(f"Error getting trade data for {option_symbol}: {str(e)}")
+                
+                # Create option data entry for all analyzed options
+                option_entry = {
+                    'contract': f"{ticker} {strike} {expiry} {contract_type.upper()}",
+                    'volume': total_volume,
+                    'avg_price': avg_price,
+                    'premium': total_premium,
+                    'sentiment': sentiment,
+                    'unusualness_score': unusualness_score,
+                    'score_breakdown': score_breakdown
+                }
+                
+                # Add detailed transaction information if we have it
+                if trade_info:
+                    if 'date' in trade_info:
+                        option_entry['transaction_date'] = trade_info['date']
                     
-                    # Determine sentiment based on option type
-                    sentiment = None
-                    if contract_type == 'call':
-                        sentiment = 'bullish'
-                    elif contract_type == 'put':
-                        sentiment = 'bearish'
-                    
-                    # Get the actual transaction date if available
-                    # We'll use our polygon_trades module to get the most significant trade
-                    trade_info = None
-                    try:
-                        trade_info = get_option_trade_data(option_symbol)
-                    except Exception as e:
-                        print(f"Error getting trade data for {option_symbol}: {str(e)}")
-                    
-                    # Create activity entry with our new data
-                    activity_entry = {
-                        'contract': f"{ticker} {strike} {expiry} {contract_type.upper()}",
-                        'volume': total_volume,
-                        'avg_price': avg_price,
-                        'premium': total_premium,
-                        'sentiment': sentiment,
-                        'unusualness_score': unusualness_score,
-                        'score_breakdown': score_breakdown
-                    }
-                    
-                    # Add detailed transaction information if we have it
-                    if trade_info:
-                        if 'date' in trade_info:
-                            activity_entry['transaction_date'] = trade_info['date']
+                    # Include exchange information
+                    if 'exchange' in trade_info:
+                        option_entry['exchange'] = trade_info['exchange']
                         
-                        # Include exchange information
-                        if 'exchange' in trade_info:
-                            activity_entry['exchange'] = trade_info['exchange']
-                            
-                        # Include exact timestamp if available
-                        if 'timestamp' in trade_info:
-                            activity_entry['timestamp'] = trade_info['timestamp']
-                            
-                        # Include human-readable timestamp if available
-                        if 'timestamp_human' in trade_info:
-                            activity_entry['timestamp_human'] = trade_info['timestamp_human']
-                    
-                    unusual_activity.append(activity_entry)
+                    # Include exact timestamp if available
+                    if 'timestamp' in trade_info:
+                        option_entry['timestamp'] = trade_info['timestamp']
+                        
+                    # Include human-readable timestamp if available
+                    if 'timestamp_human' in trade_info:
+                        option_entry['timestamp_human'] = trade_info['timestamp_human']
+                
+                # Add to ALL options analyzed list (regardless of unusualness score)
+                all_options.append(option_entry)
+                
+                # Only add to unusual activity if score is above threshold
+                if unusualness_score >= 30:  # Consider 30 as the threshold for "unusual enough"
+                    # Use the same data for unusual activity
+                    unusual_activity.append(option_entry.copy())
         
         # No fallback to Yahoo Finance - only using Polygon.io data as requested
         if forbidden_error_count > 5 and len(unusual_activity) == 0:
             print(f"Too many 403 errors for {ticker}, but not falling back to Yahoo Finance as requested")
-            # Cache empty results to prevent repeated API calls that will fail
-            empty_result = []
+            
+            # Even with errors, store sentiment counts from any options analyzed
+            if len(all_options) > 0:
+                all_bullish_count = sum(1 for item in all_options if item.get('sentiment') == 'bullish')
+                all_bearish_count = sum(1 for item in all_options if item.get('sentiment') == 'bearish')
+                empty_result = {
+                    'unusual_options': [],
+                    'total_bullish_count': all_bullish_count,
+                    'total_bearish_count': all_bearish_count,
+                    'all_options_analyzed': len(all_options)
+                }
+            else:
+                empty_result = {
+                    'unusual_options': [],
+                    'total_bullish_count': 0,
+                    'total_bearish_count': 0,
+                    'all_options_analyzed': 0
+                }
+                
             cache_module.add_to_cache(ticker, empty_result)
             print(f"Cached empty result for {ticker} due to API errors (will expire in 5 minutes)")
-            # Return empty list to indicate no unusual activity found
+            # Return empty result to indicate no unusual activity found
             return empty_result
         
         # Calculate sentiment counts from ALL options analyzed (not just unusual ones)
@@ -947,7 +969,8 @@ def get_unusual_options_activity(ticker):
         result_with_metadata = {
             'unusual_options': result,
             'total_bullish_count': all_bullish_count,
-            'total_bearish_count': all_bearish_count
+            'total_bearish_count': all_bearish_count,
+            'all_options_analyzed': len(all_options)
         }
         
         # Store in cache with current timestamp
