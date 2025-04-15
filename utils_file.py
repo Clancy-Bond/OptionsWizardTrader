@@ -1,6 +1,7 @@
 import re
 import os
 import json
+import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -87,7 +88,7 @@ COMMON_WORDS = [
 
 def format_ticker(ticker):
     """
-    Format ticker symbol to be compatible with Polygon.io API.
+    Format ticker symbol to be compatible with yfinance.
     
     Args:
         ticker: Ticker symbol input
@@ -269,7 +270,7 @@ def fetch_all_tickers():
 def is_valid_ticker(ticker):
     """
     Check if a symbol is a valid stock ticker by checking against our cached list
-    or using Polygon.io API directly.
+    or using Polygon.io API with Yahoo Finance as backup.
     
     Args:
         ticker: The symbol to check
@@ -286,7 +287,7 @@ def is_valid_ticker(ticker):
         ticker = ticker[1:]
     
     # Basic format validation: 1-5 characters, all uppercase letters
-    if not re.match(r'^[A-Z0-9\.]{1,5}$', ticker):
+    if not re.match(r'^[A-Z]{1,5}$', ticker):
         return False
         
     # Quick check in cache to avoid API calls
@@ -307,7 +308,7 @@ def is_valid_ticker(ticker):
                     VALIDATED_TICKERS.add(ticker)
                     return True
         
-        # Also check valid tickers cache
+        # Then check valid tickers (from Yahoo)
         if os.path.exists('valid_tickers.json'):
             with open('valid_tickers.json', 'r') as f:
                 cached_tickers = json.load(f)
@@ -317,55 +318,51 @@ def is_valid_ticker(ticker):
     except Exception as e:
         print(f"Error checking ticker against cache files: {str(e)}")
     
-    # If not in cache, use Polygon API if available
-    if os.getenv('POLYGON_API_KEY'):
+    # Check if today is the 5th of the month - ONLY use API validation on the 5th
+    today = datetime.now()
+    refresh_day = today.day == 5
+    
+    # Only use Polygon API validation strictly on the 5th
+    if refresh_day and os.getenv('POLYGON_API_KEY'):
         try:
-            print(f"Checking ticker {ticker} with Polygon API")
+            print(f"Today is the 5th: Checking ticker {ticker} with Polygon API")
             if polygon.is_valid_ticker(ticker):
                 # It's a valid ticker - add to cache
                 VALIDATED_TICKERS.add(ticker)
                 print(f"Polygon validated and cached ticker: {ticker}")
-                
-                # Save to valid_tickers.json
-                try:
-                    current_tickers = []
-                    if os.path.exists('valid_tickers.json'):
-                        with open('valid_tickers.json', 'r') as f:
-                            current_tickers = json.load(f)
-                    if ticker not in current_tickers:
-                        current_tickers.append(ticker)
-                        with open('valid_tickers.json', 'w') as f:
-                            json.dump(current_tickers, f)
-                except Exception as save_error:
-                    print(f"Error saving ticker validation: {str(save_error)}")
-                
-                # If it's the 5th of the month, update polygon_tickers.json too
-                today = datetime.now()
-                if today.day == 5:
-                    try:
-                        polygon_tickers = []
-                        if os.path.exists('polygon_tickers.json'):
-                            with open('polygon_tickers.json', 'r') as f:
-                                polygon_tickers = json.load(f)
-                        if ticker not in polygon_tickers:
-                            polygon_tickers.append(ticker)
-                            with open('polygon_tickers.json', 'w') as f:
-                                json.dump(polygon_tickers, f)
-                    except Exception as save_error:
-                        print(f"Error saving to Polygon tickers cache: {str(save_error)}")
-                
                 return True
-            return False
         except Exception as e:
             print(f"Error with Polygon validation for {ticker}: {str(e)}")
-            # If we can't validate with Polygon, we'll assume the ticker is invalid
-            return False
-    else:
-        print("No Polygon API key available for ticker validation")
-        # If it's in the common indices list, consider it valid
-        if ticker in COMMON_INDICES:
+    
+    # If it's not the 5th of month, use Yahoo Finance but don't update Polygon cache
+    # We still validate with Yahoo, but only save to valid_tickers.json, not polygon_tickers.json
+    try:
+        # Try a quick info lookup for a known field (faster than full info)
+        # Just check if we can get price data
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="1d")
+        
+        if not hist.empty:
+            # It's a valid ticker - add to cache 
             VALIDATED_TICKERS.add(ticker)
+            print(f"Yahoo validated and cached ticker: {ticker}")
+            
+            # Only save to valid_tickers.json - NEVER update polygon_tickers.json except on the 5th
+            try:
+                current_tickers = []
+                if os.path.exists('valid_tickers.json'):
+                    with open('valid_tickers.json', 'r') as f:
+                        current_tickers = json.load(f)
+                if ticker not in current_tickers:
+                    current_tickers.append(ticker)
+                    with open('valid_tickers.json', 'w') as f:
+                        json.dump(current_tickers, f)
+            except Exception as save_error:
+                print(f"Error saving Yahoo ticker validation: {str(save_error)}")
             return True
+        return False
+    except Exception as e:
+        print(f"Error validating ticker {ticker} with Yahoo: {str(e)}")
         return False
 
 def load_permissions():
