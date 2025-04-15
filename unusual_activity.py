@@ -197,13 +197,32 @@ def run_unusual_activity_test(ticker):
             
             # Print delta-weighted sentiment
             if 'bullish_delta_pct' in sentiment:
-                print(f"Bullish delta %: {sentiment.get('bullish_delta_pct', 0):.1f}%")
-                print(f"Bearish delta %: {sentiment.get('bearish_delta_pct', 0):.1f}%")
+                bull_pct = sentiment.get('bullish_delta_pct', 0)
+                bear_pct = sentiment.get('bearish_delta_pct', 0)
+                print(f"Bullish delta %: {bull_pct:.1f}%")
+                print(f"Bearish delta %: {bear_pct:.1f}%")
+                
+                # Determine overall sentiment
+                sentiment_desc = "neutral"
+                if bull_pct > 65:
+                    sentiment_desc = "strongly bullish"
+                elif bull_pct > 55:
+                    sentiment_desc = "moderately bullish"
+                elif bear_pct > 65:
+                    sentiment_desc = "strongly bearish"
+                elif bear_pct > 55:
+                    sentiment_desc = "moderately bearish"
+                    
+                print(f"Overall institutional sentiment: {sentiment_desc}")
             
             # Print total trades analyzed
             if 'total_trades' in sentiment:
-                print(f"Total trades analyzed: {sentiment.get('total_trades', 0)}")
-                print(f"Directional trades: {sentiment.get('directional_trades', 0)}")
+                total_trades = sentiment.get('total_trades', 0)
+                directional = sentiment.get('directional_trades', 0)
+                print(f"Total trades analyzed: {total_trades}")
+                print(f"Directional trades: {directional}")
+                if total_trades > 0:
+                    print(f"Non-directional ratio: {((total_trades - directional) / total_trades * 100):.1f}%")
             
             # Print strategy counts
             strategy_counts = inst_analysis.get('strategy_counts', {})
@@ -212,6 +231,14 @@ def run_unusual_activity_test(ticker):
                 for strategy, count in strategy_counts.items():
                     if count > 0:
                         print(f"  - {strategy}: {count}")
+            
+            # Print clustering info if available
+            if 'clustering' in inst_analysis:
+                clustering = inst_analysis.get('clustering', {})
+                cluster_pct = clustering.get('cluster_pct', 0)
+                if cluster_pct > 25:  # Only show if significant clustering
+                    print(f"\nTrade clustering detected: {cluster_pct:.1f}% of trades in largest cluster")
+                    print(f"Largest cluster size: {clustering.get('largest_cluster', 0)} trades")
         else:
             print(f"Analysis failed: {inst_analysis.get('message', 'Unknown error')}")
     else:
