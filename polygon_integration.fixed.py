@@ -1312,7 +1312,6 @@ def get_option_moneyness(symbol, strike_price, current_price, sentiment=None):
         print(f"Error getting option moneyness: {str(e)}")
         return "in-the-money"  # Default fallback
 
-
 def get_simplified_unusual_activity_summary(ticker):
     """
     Create a simplified, conversational summary of unusual options activity with accurate
@@ -1464,7 +1463,7 @@ def get_simplified_unusual_activity_summary(ticker):
             
             else:
                 summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-                # Removed 'bet with' text
+# Removed 'bet with' text
                 
             # Add strike price and expiration
             if len(contract_parts) >= 3:
@@ -1475,40 +1474,90 @@ def get_simplified_unusual_activity_summary(ticker):
                         strike_price = extract_strike_from_symbol(main_contract['symbol'])
                         if strike_price:
                             # Get proper moneyness classification
+
                             stock_price = get_current_price(ticker)
-                            moneyness = get_option_moneyness(main_contract['symbol'], strike_price, stock_price, "bullish")
+
+                            moneyness = get_option_moneyness(main_contract["symbol"], strike_price, stock_price, "bullish")
+
                             summary += f"{moneyness} ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-                        else:
-                            # Use contract_parts for strike if we couldn't extract from symbol
-                            try:
-                                stock_price = get_current_price(ticker)
-                                strike_value = float(contract_parts[1])
-                                # For bullish section, assume call options
-                                moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
-                            except:
-                                moneyness = "in-the-money"  # Fallback
-                            summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-                    else:
-                        # No symbol available, use contract_parts
-                        try:
+
+                            else:
+                            # Get proper moneyness classification
+
                             stock_price = get_current_price(ticker)
-                            strike_value = float(contract_parts[1])
-                            # For bullish section, assume call options
-                            moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
-                        except:
-                            moneyness = "in-the-money"  # Fallback
-                        summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-                else:
-                    # Fallback to just the second part if we couldn't parse a proper date
-                    try:
+
+                            try:
+
+                                strike_value = float(contract_parts[1])
+
+                                # Determine moneyness based on section (bullish = call, bearish = put)
+
+                                if "bullish" in summary.lower():
+
+                                    moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                                else:  # bearish
+
+                                    moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
+                            except:
+
+                                moneyness = "in-the-money"  # Fallback
+
+
+                            summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+else:
+                        # Get proper moneyness classification
+
                         stock_price = get_current_price(ticker)
+
+                        try:
+
+                            strike_value = float(contract_parts[1])
+
+                            # Determine moneyness based on section (bullish = call, bearish = put)
+
+                            if "bullish" in summary.lower():
+
+                                moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                            else:  # bearish
+
+                                moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
+                        except:
+
+                            moneyness = "in-the-money"  # Fallback
+
+
+                        summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+else:
+                    # Fallback to just the second part if we couldn't parse a proper date
+                    # Get proper moneyness classification
+
+                    stock_price = get_current_price(ticker)
+
+                    try:
+
                         strike_value = float(contract_parts[1])
-                        # For bullish section, assume call options
-                        moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                        # Determine moneyness based on section (bullish = call, bearish = put)
+
+                        if "bullish" in summary.lower():
+
+                            moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                        else:  # bearish
+
+                            moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
                     except:
+
                         moneyness = "in-the-money"  # Fallback
+
+
                     summary += f"{moneyness} ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-            else:
+else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
@@ -1518,7 +1567,7 @@ def get_simplified_unusual_activity_summary(ticker):
                 summary += f"with options from the largest unusual activity.\n\n"
             else:
                 summary += f"• I'm seeing strongly bullish activity for {ticker}, Inc.. The largest flow is a **${premium_in_millions:.1f} million bullish** "
-                # Removed 'bet with' text
+# Removed 'bet with' text
                 summary += f"options from the largest unusual activity.\n\n"
         
         # Safely calculate the ratio
@@ -1569,40 +1618,90 @@ def get_simplified_unusual_activity_summary(ticker):
                         strike_price = extract_strike_from_symbol(main_contract['symbol'])
                         if strike_price:
                             # Get proper moneyness classification
+
                             stock_price = get_current_price(ticker)
-                            moneyness = get_option_moneyness(main_contract['symbol'], strike_price, stock_price, "bearish")
+
+                            moneyness = get_option_moneyness(main_contract["symbol"], strike_price, stock_price, "bullish")
+
                             summary += f"{moneyness} ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-                        else:
-                            # Use contract_parts for strike if we couldn't extract from symbol
-                            try:
-                                stock_price = get_current_price(ticker)
-                                strike_value = float(contract_parts[1])
-                                # For bearish section, assume put options
-                                moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
-                            except:
-                                moneyness = "in-the-money"  # Fallback
-                            summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-                    else:
-                        # No symbol available, use contract_parts
-                        try:
+
+                            else:
+                            # Get proper moneyness classification
+
                             stock_price = get_current_price(ticker)
-                            strike_value = float(contract_parts[1])
-                            # For bearish section, assume put options
-                            moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
-                        except:
-                            moneyness = "in-the-money"  # Fallback
-                        summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-                else:
-                    # Fallback to just the second part if we couldn't parse a proper date
-                    try:
+
+                            try:
+
+                                strike_value = float(contract_parts[1])
+
+                                # Determine moneyness based on section (bullish = call, bearish = put)
+
+                                if "bullish" in summary.lower():
+
+                                    moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                                else:  # bearish
+
+                                    moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
+                            except:
+
+                                moneyness = "in-the-money"  # Fallback
+
+
+                            summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+else:
+                        # Get proper moneyness classification
+
                         stock_price = get_current_price(ticker)
+
+                        try:
+
+                            strike_value = float(contract_parts[1])
+
+                            # Determine moneyness based on section (bullish = call, bearish = put)
+
+                            if "bullish" in summary.lower():
+
+                                moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                            else:  # bearish
+
+                                moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
+                        except:
+
+                            moneyness = "in-the-money"  # Fallback
+
+
+                        summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+else:
+                    # Fallback to just the second part if we couldn't parse a proper date
+                    # Get proper moneyness classification
+
+                    stock_price = get_current_price(ticker)
+
+                    try:
+
                         strike_value = float(contract_parts[1])
-                        # For bearish section, assume put options
-                        moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
+                        # Determine moneyness based on section (bullish = call, bearish = put)
+
+                        if "bullish" in summary.lower():
+
+                            moneyness = "in-the-money" if stock_price > strike_value else "out-of-the-money"
+
+                        else:  # bearish
+
+                            moneyness = "in-the-money" if stock_price < strike_value else "out-of-the-money"
+
                     except:
+
                         moneyness = "in-the-money"  # Fallback
+
+
                     summary += f"{moneyness} ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
-            else:
+else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
             # If we couldn't parse the contract but have a timestamp
