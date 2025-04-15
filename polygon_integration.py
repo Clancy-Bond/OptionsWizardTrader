@@ -1486,9 +1486,9 @@ def get_simplified_unusual_activity_summary(ticker):
         
         # Safely calculate the ratio
         if bullish_count > 0:
-            summary += f"• Institutional Investors are heavily favoring put options with volume {round(bearish_count/bullish_count, 1)}x the call\nopen interest.\n\n"
+            summary += f"• Institutional Investors are favoring put options with volume {round(bearish_count/bullish_count, 1)}x the call\nopen interest.\n\n"
         else:
-            summary += f"• Institutional Investors are heavily favoring put options with dominant put volume.\n\n"
+            summary += f"• Institutional Investors are favoring put options with dominant put volume.\n\n"
             
     else:
         summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
