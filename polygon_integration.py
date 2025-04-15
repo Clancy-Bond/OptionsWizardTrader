@@ -1424,14 +1424,43 @@ def get_simplified_unusual_activity_summary(ticker):
                     if 'symbol' in main_contract:
                         strike_price = extract_strike_from_symbol(main_contract['symbol'])
                         if strike_price:
-                            summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                            # Determine correct moneyness
+                            stock_price = result_with_metadata.get('current_stock_price', 0)
+                            moneyness = determine_moneyness(strike_price, stock_price, 'put')
+                            summary += f"{moneyness} ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
                         else:
-                            summary += f"in-the-money ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                            # Try to determine moneyness from contract parts
+                            try:
+                                strike_from_parts = float(contract_parts[1])
+                                moneyness = determine_moneyness(strike_from_parts, result_with_metadata.get('current_stock_price', 0), 'put')
+                            except (ValueError, IndexError):
+                                moneyness = "in-the-money"  # Default if we can't determine
+                            summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
                     else:
-                        summary += f"in-the-money ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                        # Try to determine moneyness from contract parts
+                        try:
+                            strike_from_parts = float(contract_parts[1])
+                            moneyness = determine_moneyness(strike_from_parts, result_with_metadata.get('current_stock_price', 0), 'put')
+                        except (ValueError, IndexError):
+                            moneyness = "in-the-money"  # Default if we can't determine
+                        summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                    # Try to determine moneyness for soon-expiring options
+                    try:
+                        strike_from_parts = float(contract_parts[1])
+                        moneyness = determine_moneyness(strike_from_parts, result_with_metadata.get('current_stock_price', 0), 'put')
+                    except (ValueError, IndexError):
+                        moneyness = "in-the-money"  # Default if we can't determine
+                    summary += f"{moneyness} ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
@@ -1492,14 +1521,43 @@ def get_simplified_unusual_activity_summary(ticker):
                     if 'symbol' in main_contract:
                         strike_price = extract_strike_from_symbol(main_contract['symbol'])
                         if strike_price:
-                            summary += f"in-the-money ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                            # Determine correct moneyness
+                            stock_price = result_with_metadata.get('current_stock_price', 0)
+                            moneyness = determine_moneyness(strike_price, stock_price, 'put')
+                            summary += f"{moneyness} ({strike_price}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
                         else:
-                            summary += f"in-the-money ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                            # Try to determine moneyness from contract parts
+                            try:
+                                strike_from_parts = float(contract_parts[1])
+                                moneyness = determine_moneyness(strike_from_parts, result_with_metadata.get('current_stock_price', 0), 'put')
+                            except (ValueError, IndexError):
+                                moneyness = "in-the-money"  # Default if we can't determine
+                            summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
                     else:
-                        summary += f"in-the-money ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                        # Try to determine moneyness from contract parts
+                        try:
+                            strike_from_parts = float(contract_parts[1])
+                            moneyness = determine_moneyness(strike_from_parts, result_with_metadata.get('current_stock_price', 0), 'put')
+                        except (ValueError, IndexError):
+                            moneyness = "in-the-money"  # Default if we can't determine
+                        summary += f"{moneyness} ({contract_parts[1]}) options expiring {expiry_date}, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
                 else:
                     # Fallback to just the second part if we couldn't parse a proper date
-                    summary += f"in-the-money ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}.\n\n"
+                    # Try to determine moneyness for soon-expiring options
+                    try:
+                        strike_from_parts = float(contract_parts[1])
+                        moneyness = determine_moneyness(strike_from_parts, result_with_metadata.get('current_stock_price', 0), 'put')
+                    except (ValueError, IndexError):
+                        moneyness = "in-the-money"  # Default if we can't determine
+                    summary += f"{moneyness} ({contract_parts[1]}) options expiring soon, purchased {timestamp_str if timestamp_str else '2025-04-14'}.
+
+"
             else:
                 summary += f"options from the largest unusual activity.\n\n"
         except (IndexError, AttributeError):
