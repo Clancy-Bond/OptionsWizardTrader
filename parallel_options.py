@@ -6,6 +6,7 @@ to improve performance when analyzing many options simultaneously.
 
 import concurrent.futures
 from functools import partial
+import threading
 
 # We'll need these imports from polygon_integration.py
 # They're included here to make the file self-contained
@@ -21,9 +22,19 @@ from polygon_trades import get_option_trade_data
 # Configuration
 MAX_WORKERS = 8  # Adjust based on your CPU cores
 BATCH_SIZE = None  # None means auto-determine based on number of options
+BASE_URL = "https://api.polygon.io"
+POLYGON_API_KEY = os.environ.get('POLYGON_API_KEY', '')
+
+# Thread-local storage for error tracking
+# This helps us track errors across multiple worker threads
+thread_local = threading.local()
+
+# Create thread-safe counters for tracking API errors
+error_lock = threading.Lock()
+forbidden_errors = 0
 
 # Function to process a single option
-def process_single_option(option, stock_price, headers, forbidden_error_count=0, all_options=None):
+def process_single_option(option, stock_price, headers, ticker):
     """
     Process a single option to determine if it has unusual activity
     This function is designed to be run in parallel by the ThreadPoolExecutor
@@ -32,25 +43,21 @@ def process_single_option(option, stock_price, headers, forbidden_error_count=0,
         option: The option data to analyze
         stock_price: Current price of the underlying stock
         headers: API request headers
-        forbidden_error_count: Counter for 403 errors (shared across threads)
-        all_options: List to collect ALL options analyzed (shared across threads)
+        ticker: The underlying stock ticker symbol
         
     Returns:
         Tuple of (option_data, unusualness_score, is_unusual, sentiment)
     """
-    if not all_options:
-        all_options = []
-        
+    global forbidden_errors
+    
     try:
         option_symbol = option.get('ticker')
-        ticker = option.get('underlying_ticker', '').upper()
         strike = option.get('strike_price')
         expiry = option.get('expiration_date')
         contract_type = option.get('contract_type', '').lower()
         
-        # These URLs and functions would need to come from polygon_integration.py
-        POLYGON_API_KEY = os.environ.get('POLYGON_API_KEY', '')
-        BASE_URL = "https://api.polygon.io"
+        # Print progress info
+        print(f"Processing {option_symbol} ({contract_type.upper()} {strike})")
         
         # Get trades for this option
         endpoint = f"{BASE_URL}/v3/trades/{option_symbol}?limit=50&order=desc&apiKey={POLYGON_API_KEY}"
@@ -58,30 +65,72 @@ def process_single_option(option, stock_price, headers, forbidden_error_count=0,
         # Make the API call with proper headers
         response = requests.get(endpoint, headers=headers)
         
+        # Handle API error responses
         if response.status_code != 200:
+            if response.status_code == 403:
+                with error_lock:
+                    forbidden_errors += 1
+                if forbidden_errors > 5:
+                    print(f"Multiple 403 errors for {option_symbol}, API access issue detected")
             return None, 0, False, None
             
         data = response.json()
         trades = data.get('results', [])
         
+        # Print number of trades found
+        print(f"Found {len(trades)} trades for {option_symbol}")
+        
         # Skip if no trades
         if not trades:
             return None, 0, False, None
-            
-        # This would be imported from polygon_integration.py in practice
-        def calculate_unusualness_score(option, trades, stock_price):
-            # Placeholder for the actual function
-            # In practice, you'd import this from polygon_integration.py
-            
-            # Simulate a score between 0-60
-            volume = sum(t.get('size', 0) for t in trades)
-            avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / volume if volume > 0 else 0
-            score = min(60, int(volume / 10) + int(avg_price * 10))
-            
-            return score, {"volume": volume, "price": avg_price}
+        
+        # Get the scoring function - defined at module level to avoid circular imports
+        # as we're importing it locally inside the function
+        try:
+            # First try importing directly
+            from polygon_integration import calculate_unusualness_score
+        except ImportError:
+            # If that fails, define a simple scoring function as fallback
+            print("Warning: Could not import calculate_unusualness_score, using simple fallback")
+            def calculate_unusualness_score(option, trades, stock_price):
+                """Simple fallback scoring function"""
+                volume = sum(t.get('size', 0) for t in trades)
+                avg_price = sum(t.get('price', 0) * t.get('size', 0) for t in trades) / volume if volume > 0 else 0
+                
+                # Calculate score based on volume and price
+                # Higher volume = more unusual
+                # Higher premium = more unusual
+                premium = volume * 100 * avg_price
+                
+                # Baseline score from volume
+                volume_score = min(25, int(volume / 10))
+                
+                # Premium boost (higher premium = higher score)
+                premium_score = min(25, int((premium / 1000000) * 10))
+                
+                # Strike proximity to current price
+                strike = option.get('strike_price', 0)
+                proximity_pct = abs(strike - stock_price) / stock_price
+                proximity_score = min(25, int((1 - proximity_pct) * 25))
+                
+                # Combine scores
+                total_score = volume_score + premium_score + proximity_score
+                
+                # Cap at 60
+                final_score = min(60, total_score)
+                
+                # Score breakdown for explanation
+                score_breakdown = {
+                    'volume_score': volume_score,
+                    'premium_score': premium_score,
+                    'proximity_score': proximity_score,
+                }
+                
+                return final_score, score_breakdown
         
         # Calculate unusualness score
         unusualness_score, score_breakdown = calculate_unusualness_score(option, trades, stock_price)
+        print(f"Option {option_symbol} received unusualness score: {unusualness_score}")
         
         # Calculate metrics for the activity
         total_volume = sum(t.get('size', 0) for t in trades)
@@ -99,6 +148,8 @@ def process_single_option(option, stock_price, headers, forbidden_error_count=0,
         trade_info = None
         try:
             trade_info = get_option_trade_data(option_symbol)
+            if trade_info:
+                print(f"Found {'significant' if trade_info.get('size', 0) > 0 else 'recent'} trade with size {trade_info.get('size', 0)} for {option_symbol}")
         except Exception as e:
             print(f"Error getting trade data for {option_symbol}: {str(e)}")
         
@@ -150,7 +201,7 @@ def process_single_option(option, stock_price, headers, forbidden_error_count=0,
         print(f"Error processing option {option.get('ticker', 'unknown')}: {str(e)}")
         return None, 0, False, None
 
-def analyze_options_in_parallel(near_money_options, stock_price, headers, max_workers=MAX_WORKERS):
+def analyze_options_in_parallel(near_money_options, stock_price, headers, ticker, max_workers=MAX_WORKERS):
     """
     Analyze options in parallel using a thread pool
     
@@ -158,6 +209,7 @@ def analyze_options_in_parallel(near_money_options, stock_price, headers, max_wo
         near_money_options: List of options to analyze
         stock_price: Current price of the underlying stock
         headers: API request headers
+        ticker: The stock ticker symbol
         max_workers: Maximum number of parallel worker threads
         
     Returns:
@@ -175,7 +227,7 @@ def analyze_options_in_parallel(near_money_options, stock_price, headers, max_wo
     print(f"Using {worker_count} parallel workers for analysis")
     
     # Prepare the partial function with fixed parameters
-    process_func = partial(process_single_option, stock_price=stock_price, headers=headers)
+    process_func = partial(process_single_option, stock_price=stock_price, headers=headers, ticker=ticker)
     
     # Create a thread pool and process options in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:

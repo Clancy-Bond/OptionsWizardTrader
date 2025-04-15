@@ -816,6 +816,36 @@ def get_unusual_options_activity(ticker):
         # Sort by proximity to current price for better analysis in the output
         near_money_options.sort(key=lambda x: abs(x.get('strike_price', 0) - stock_price))
         
+        # Check if we should use parallel processing
+        try:
+            # Try to import parallel processing module
+            print("Attempting to use parallel processing for faster option analysis...")
+            from parallel_options import analyze_options_in_parallel
+            
+            # Use parallel processing for better performance
+            result_with_metadata = analyze_options_in_parallel(
+                near_money_options, 
+                stock_price, 
+                get_headers(), 
+                ticker
+            )
+            
+            # Store in cache with current timestamp
+            cache_module.add_to_cache(ticker, result_with_metadata)
+            
+            all_bullish_count = result_with_metadata.get('total_bullish_count', 0)
+            all_bearish_count = result_with_metadata.get('total_bearish_count', 0)
+            all_options_count = result_with_metadata.get('all_options_analyzed', 0)
+            
+            print(f"Added {ticker} to cache (will persist until next market open)")
+            print(f"Cached unusual activity data for {ticker} with {all_bullish_count} bullish and {all_bearish_count} bearish options out of {all_options_count} total analyzed options (will expire in 5 minutes)")
+            
+            return result_with_metadata
+            
+        except ImportError:
+            print("Parallel processing not available, using sequential processing")
+                
+        # Fall back to sequential processing if parallel processing is not available
         # Look for unusual volume and premium patterns
         for option in near_money_options:
             option_symbol = option.get('ticker')
