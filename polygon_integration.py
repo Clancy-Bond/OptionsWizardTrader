@@ -834,9 +834,14 @@ def get_unusual_options_activity(ticker):
                     filtered_by_strike += 1
                     continue
                 
-                # Check if option has minimum open interest (at least 10 contracts)
-                # This balances data quality with processing performance
-                interest_filter = open_interest >= 10
+                # Temporarily disable open interest filtering for testing purposes
+                # This will show us how many options we get when not filtering by open interest
+                import random  # Import at top of file in production code
+                if random.random() < 0.05:  # Only print ~5% of options to avoid flooding logs
+                    print(f"DEBUG: Option {option.get('ticker')} - Strike: {strike_price}, Open Interest: {open_interest}")
+                    
+                # Temporarily disabled open interest filter - include all options
+                interest_filter = True
                 
                 if not interest_filter:
                     filtered_by_interest += 1
