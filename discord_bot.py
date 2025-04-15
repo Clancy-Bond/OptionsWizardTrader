@@ -6,7 +6,6 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import option_calculator
-import technical_analysis
 import unusual_activity
 from datetime import datetime
 import utils_file
@@ -193,18 +192,17 @@ class OptionsBot(commands.Bot):
                 await message.channel.send(f"Channel is already whitelisted.")
         elif parsed['ticker']:
             # If we have a ticker but no recognized intent, provide helpful message
-            await message.channel.send(f"I recognized the ticker {parsed['ticker']}, but I'm not sure what to do with it. Try asking about price estimates, stop-loss recommendations, or unusual options activity.")
+            await message.channel.send(f"I recognized the ticker {parsed['ticker']}, but I'm not sure what to do with it. Try asking about price estimates or unusual options activity.")
         elif not parsed['ticker'] and any(word in content.lower() for word in ['help', 'how', 'what']):
             # Provide help message
             help_text = ("I can help with options trading analysis. Here's what you can ask me:\n\n"
                         "- Price estimates: `@SWJ-AI-Options what will AAPL $190 calls be worth if the stock hits $200?`\n"
-                        "- Stop-loss recommendations: `@SWJ-AI-Options stop-loss for TSLA $800 calls`\n"
                         "- Unusual options activity: `@SWJ-AI-Options unusual options for MSFT`\n\n"
                         "Make sure to include a valid ticker symbol in your question.")
             await message.channel.send(help_text)
         else:
             # Fallback for unrecognized queries
-            await message.channel.send("I couldn't understand that request. Please include a valid ticker symbol and ask about price estimates, stop-loss recommendations, or unusual options activity.")
+            await message.channel.send("I couldn't understand that request. Please include a valid ticker symbol and ask about price estimates or unusual options activity.")
     
     async def handle_price_request(self, message, parsed):
         """Handle option price estimation requests"""
@@ -230,42 +228,7 @@ class OptionsBot(commands.Bot):
         except Exception as e:
             await message.channel.send(f"I encountered an error while calculating option prices: {str(e)}")
     
-    async def handle_stop_loss_request(self, message, parsed):
-        """Handle stop-loss recommendation requests"""
-        # Check for minimum required parameters
-        if not parsed['ticker'] or not parsed['option_type']:
-            missing = []
-            if not parsed['ticker']:
-                missing.append("ticker symbol")
-            if not parsed['option_type']:
-                missing.append("option type (call or put)")
-            
-            await message.channel.send(f"I need a {' and '.join(missing)} to recommend stop-loss levels. Try something like: `@{self.user.name} stop-loss for AAPL calls`")
-            return
-        
-        try:
-            # Get stop-loss recommendation
-            stop_loss_data = technical_analysis.calculate_stop_loss(
-                parsed['ticker'], 
-                parsed.get('strike', None),
-                parsed.get('expiration', None),
-                parsed['option_type']
-            )
-            
-            # Format the response
-            if isinstance(stop_loss_data, dict) and 'error' in stop_loss_data:
-                # Handle errors gracefully
-                await message.channel.send(f"I couldn't calculate a stop-loss for {parsed['ticker']}: {stop_loss_data['error']}")
-            else:
-                # Format successful response
-                response_text = (f"Stop-Loss Recommendation for {parsed['ticker']} {parsed['option_type'].upper()}s:\n\n"
-                                f"Technical stop: ${stop_loss_data['price_level']:.2f}\n"
-                                f"Risk tolerance: {stop_loss_data['risk_level']}\n"
-                                f"Confidence: {stop_loss_data['confidence']}%")
-                
-                await message.channel.send(response_text)
-        except Exception as e:
-            await message.channel.send(f"I encountered an error calculating stop-loss levels: {str(e)}")
+
     
     async def handle_unusual_activity_request(self, message, parsed):
         """Handle unusual options activity requests"""
