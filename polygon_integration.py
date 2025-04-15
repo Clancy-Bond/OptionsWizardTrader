@@ -829,12 +829,19 @@ def get_unusual_options_activity(ticker):
         
         # Optimize for high-volume tickers to avoid timeout issues
         high_volume_tickers = {'AAPL', 'MSFT', 'TSLA', 'SPY', 'QQQ', 'NVDA', 'AMZN', 'GOOGL', 'META', 'AMD'}
-        price_range_multiplier = 0.25  # Default: 25% of current price
+        high_performance_mode = os.environ.get('HIGH_PERFORMANCE_MODE', 'false').lower() == 'true'
         
+        # Default: 25% of current price for regular tickers
+        price_range_multiplier = 0.25
+        
+        # For high volume tickers or when in high performance mode, use tighter range
         if ticker in high_volume_tickers:
-            # Use a tighter price range for high-volume tickers to avoid timeouts
-            price_range_multiplier = 0.15  # 15% of current price for high-volume tickers
+            price_range_multiplier = 0.15  # 15% of current price
             print(f"Using optimized price range ({price_range_multiplier*100}%) for high-volume ticker {ticker}")
+        elif high_performance_mode:
+            # Even tighter for high performance mode requests
+            price_range_multiplier = 0.12  # 12% of current price 
+            print(f"Using high-performance price range ({price_range_multiplier*100}%) for {ticker}")
         
         if stock_price:
             for option in chain:

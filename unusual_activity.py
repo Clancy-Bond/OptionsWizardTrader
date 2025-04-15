@@ -120,12 +120,13 @@ def get_unusual_options_activity(ticker):
         print(f"Error fetching unusual options activity from Polygon: {str(e)}")
         return []
 
-def get_simplified_unusual_activity_summary(ticker):
+def get_simplified_unusual_activity_summary(ticker, high_performance=False):
     """
     Create a simplified, conversational summary of unusual options activity.
     
     Args:
         ticker: Stock ticker symbol
+        high_performance: If True, use optimizations for large option chains
     
     Returns:
         A string with a conversational summary of unusual options activity
@@ -133,6 +134,17 @@ def get_simplified_unusual_activity_summary(ticker):
     # Only use Polygon.io API as requested
     if os.getenv('POLYGON_API_KEY'):
         try:
+            # If high performance mode is requested or ticker is a high-volume one, use optimizations
+            high_volume_tickers = {'AAPL', 'MSFT', 'TSLA', 'SPY', 'QQQ', 'NVDA', 'AMZN', 'GOOGL', 'META', 'AMD'}
+            if high_performance or ticker.upper() in high_volume_tickers:
+                print(f"Using high-performance mode for {ticker}")
+                # Let polygon integration know this is a high-performance request
+                os.environ['HIGH_PERFORMANCE_MODE'] = 'true'
+            else:
+                # Clear the environment variable to use regular mode
+                if 'HIGH_PERFORMANCE_MODE' in os.environ:
+                    del os.environ['HIGH_PERFORMANCE_MODE']
+            
             polygon_summary = polygon.get_simplified_unusual_activity_summary(ticker)
             if polygon_summary and len(polygon_summary) > 20:  # Check for a valid response
                 print(f"Using Polygon.io data for unusual activity summary for {ticker}")
