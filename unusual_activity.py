@@ -85,7 +85,8 @@ def get_unusual_options_activity(ticker):
         ticker: Stock ticker symbol
     
     Returns:
-        List of unusual options activity with sentiment, or empty list if Polygon.io API key is not available
+        Data structure with unusual options information and overall market sentiment counts,
+        or empty list if Polygon.io API key is not available
     """
     # Only proceed if Polygon API key is available
     if not os.getenv('POLYGON_API_KEY'):
@@ -94,12 +95,22 @@ def get_unusual_options_activity(ticker):
         
     try:
         # Use polygon integration to get unusual activity
-        unusual_activity_data = polygon.get_unusual_options_activity(ticker)
+        result_with_metadata = polygon.get_unusual_options_activity(ticker)
         
         # If we got data from polygon, return it
-        if unusual_activity_data:
+        if result_with_metadata:
             print(f"Retrieved unusual activity data from Polygon for {ticker}")
-            return unusual_activity_data
+            
+            # Handle both new format (with metadata) and old format
+            if isinstance(result_with_metadata, dict) and 'unusual_options' in result_with_metadata:
+                options_count = len(result_with_metadata.get('unusual_options', []))
+                bullish = result_with_metadata.get('total_bullish_count', 0)
+                bearish = result_with_metadata.get('total_bearish_count', 0)
+                print(f"Found {options_count} unusual options with {bullish} bullish and {bearish} bearish overall")
+            else:
+                print(f"Found {len(result_with_metadata)} unusual options in legacy format")
+                
+            return result_with_metadata
             
         # If polygon returned empty data, return empty list
         return []

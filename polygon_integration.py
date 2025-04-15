@@ -915,17 +915,29 @@ def get_unusual_options_activity(ticker):
             # Return empty list to indicate no unusual activity found
             return empty_result
         
+        # Calculate overall market sentiment counts from all unusual activities
+        # We'll attach this to the result for accurate flow percentages
+        all_bullish_count = sum(1 for item in unusual_activity if item.get('sentiment') == 'bullish')
+        all_bearish_count = sum(1 for item in unusual_activity if item.get('sentiment') == 'bearish')
+        
         # Sort by unusualness score in descending order, with premium as a secondary factor
         unusual_activity.sort(key=lambda x: (x.get('unusualness_score', 0), x.get('premium', 0)), reverse=True)
         
         # Take top 5 (if we have that many)
         result = unusual_activity[:5]
         
-        # Store in cache with current timestamp
-        cache_module.add_to_cache(ticker, result)
+        # Add the overall sentiment counts to the result
+        result_with_metadata = {
+            'unusual_options': result,
+            'total_bullish_count': all_bullish_count,
+            'total_bearish_count': all_bearish_count
+        }
         
-        print(f"Cached unusual activity data for {ticker} (will expire in 5 minutes)")
-        return result
+        # Store in cache with current timestamp
+        cache_module.add_to_cache(ticker, result_with_metadata)
+        
+        print(f"Cached unusual activity data for {ticker} with {all_bullish_count} bullish and {all_bearish_count} bearish options out of {len(unusual_activity)} total unusual options (will expire in 5 minutes)")
+        return result_with_metadata
         
     except Exception as e:
         print(f"Error fetching unusual activity for {ticker}: {str(e)}")
@@ -978,22 +990,38 @@ def get_simplified_unusual_activity_summary(ticker):
     # Check if we have ticker in cache before calling the function
     print(f"DEBUG: Cache check before API call - {ticker} {'in' if cache_module.cache_contains(ticker) else 'not in'} cache")
         
-    activity = get_unusual_options_activity(ticker)
+    result_with_metadata = get_unusual_options_activity(ticker)
     
-    if not activity or len(activity) == 0:
+    if not result_with_metadata or len(result_with_metadata) == 0:
         # No fallback to Yahoo Finance - only using Polygon.io data as requested
         print(f"No unusual options activity found for {ticker} in Polygon.io data, and not falling back to Yahoo Finance as requested")
         return f"📊 No significant unusual options activity detected for {ticker} in Polygon.io data.\n\nThis could indicate normal trading patterns or low options volume."
     
-    # Determine overall sentiment
+    # Extract the actual unusual options list and total sentiment counts
+    if isinstance(result_with_metadata, dict) and 'unusual_options' in result_with_metadata:
+        all_bullish_count = result_with_metadata.get('total_bullish_count', 0)
+        all_bearish_count = result_with_metadata.get('total_bearish_count', 0)
+        activity = result_with_metadata.get('unusual_options', [])
+    else:
+        # Handle case where the old format is still in the cache
+        activity = result_with_metadata
+        all_bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
+        all_bearish_count = sum(1 for item in activity if item.get('sentiment') == 'bearish')
+    
+    if not activity:
+        return f"📊 No significant unusual options activity detected for {ticker} in Polygon.io data.\n\nThis could indicate normal trading patterns or low options volume."
+        
+    # Determine sentiment based on the top 5 most unusual options (for display purposes)
     bullish_count = sum(1 for item in activity if item.get('sentiment') == 'bullish')
     bearish_count = sum(1 for item in activity if item.get('sentiment') == 'bearish')
     
     # Debug information about the sentiment counts
-    print(f"Found {bullish_count} bullish and {bearish_count} bearish options for {ticker}")
+    print(f"Found {bullish_count} bullish and {bearish_count} bearish options in top 5 for {ticker}")
+    print(f"Total: {all_bullish_count} bullish and {all_bearish_count} bearish options in all unusual activity")
     for idx, item in enumerate(activity):
         print(f"  Option {idx+1}: {item.get('contract', 'Unknown')} - Sentiment: {item.get('sentiment', 'Unknown')}")
     
+    # Determine overall sentiment for summary display based on top unusual options
     if bullish_count > bearish_count:
         overall_sentiment = "bullish"
     elif bearish_count > bullish_count:
@@ -1001,10 +1029,10 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         overall_sentiment = "neutral"
     
-    # Calculate percentages for the overall flow display
-    total_volume = bullish_count + bearish_count
-    bullish_pct = round((bullish_count / total_volume) * 100) if total_volume > 0 else 0
-    bearish_pct = round((bearish_count / total_volume) * 100) if total_volume > 0 else 0
+    # Calculate percentages for the overall flow display based on ALL unusual activity
+    all_total_volume = all_bullish_count + all_bearish_count
+    bullish_pct = round((all_bullish_count / all_total_volume) * 100) if all_total_volume > 0 else 0
+    bearish_pct = round((all_bearish_count / all_total_volume) * 100) if all_total_volume > 0 else 0
     
     # Format total premium
     total_premium = sum(item.get('premium', 0) for item in activity)
