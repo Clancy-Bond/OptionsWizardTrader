@@ -827,6 +827,15 @@ def get_unusual_options_activity(ticker):
         filtered_by_strike = 0
         filtered_by_interest = 0
         
+        # Optimize for high-volume tickers to avoid timeout issues
+        high_volume_tickers = {'AAPL', 'MSFT', 'TSLA', 'SPY', 'QQQ', 'NVDA', 'AMZN', 'GOOGL', 'META', 'AMD'}
+        price_range_multiplier = 0.25  # Default: 25% of current price
+        
+        if ticker in high_volume_tickers:
+            # Use a tighter price range for high-volume tickers to avoid timeouts
+            price_range_multiplier = 0.15  # 15% of current price for high-volume tickers
+            print(f"Using optimized price range ({price_range_multiplier*100}%) for high-volume ticker {ticker}")
+        
         if stock_price:
             for option in chain:
                 option_symbol = option.get('ticker')
@@ -839,8 +848,8 @@ def get_unusual_options_activity(ticker):
                 if not option_symbol or not strike or not expiry or not contract_type:
                     continue
                 
-                # Check if within expanded range (25% of current price)
-                price_filter = abs(strike - stock_price) / stock_price <= 0.25
+                # Check if within price range (adjusted for high-volume tickers)
+                price_filter = abs(strike - stock_price) / stock_price <= price_range_multiplier
                 
                 if not price_filter:
                     filtered_by_strike += 1
@@ -862,7 +871,7 @@ def get_unusual_options_activity(ticker):
                 # Only include options that meet both criteria
                 near_money_options.append(option)
         
-        print(f"Found {len(near_money_options)} options to analyze (within 25% of price and min. open interest)")
+        print(f"Found {len(near_money_options)} options to analyze (within {price_range_multiplier*100:.0f}% of price and min. open interest)")
         print(f"Filtered out {filtered_by_strike} options outside price range and {filtered_by_interest} with insufficient open interest")
         print(f"Total options in chain: {total_options}")
         

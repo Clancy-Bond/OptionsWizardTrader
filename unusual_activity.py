@@ -41,10 +41,11 @@ def detect_unusual_activity(ticker, option_type):
             filtered_activity = []
             for item in unusual_activity_data:
                 # Check if this is the requested option type
-                if option_type.lower() == 'call' and item.get('sentiment') == 'bullish':
-                    filtered_activity.append(item)
-                elif option_type.lower() == 'put' and item.get('sentiment') == 'bearish':
-                    filtered_activity.append(item)
+                if isinstance(item, dict):
+                    if option_type.lower() == 'call' and item.get('sentiment') == 'bullish':
+                        filtered_activity.append(item)
+                    elif option_type.lower() == 'put' and item.get('sentiment') == 'bearish':
+                        filtered_activity.append(item)
             
             if filtered_activity:
                 # We have unusual activity for the requested option type
