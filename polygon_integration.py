@@ -13,6 +13,18 @@ from polygon_trades import get_option_trade_data
 import math
 import cache_module
 
+# Import the institutional sentiment analysis module
+try:
+    from institutional_sentiment import analyze_institutional_sentiment, get_human_readable_summary
+    INSTITUTIONAL_ANALYSIS_AVAILABLE = True
+except ImportError:
+    INSTITUTIONAL_ANALYSIS_AVAILABLE = False
+    # Create stub functions if the module isn't available
+    def analyze_institutional_sentiment(option_trades, stock_price):
+        return {'status': 'module_not_found'}
+    def get_human_readable_summary(analysis_results, ticker):
+        return "Institutional sentiment analysis not available"
+
 # Load environment variables
 load_dotenv()
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
