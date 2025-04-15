@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import option_calculator
-import unusual_activity
+import polygon_integration
 from datetime import datetime
 import utils_file
 
