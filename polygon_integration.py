@@ -1275,6 +1275,43 @@ def is_option_in_the_money(symbol, strike_price, current_price):
         print(f"Error determining if option is in-the-money: {str(e)}")
         return False, None
 
+def get_option_moneyness(symbol, strike_price, current_price, sentiment=None):
+    """
+    Gets a human-readable moneyness description based on the option details
+    
+    Args:
+        symbol: Option symbol 
+        strike_price: Strike price as float or string
+        current_price: Current stock price
+        sentiment: Optional sentiment ('bullish' or 'bearish') if symbol doesn't clearly indicate option type
+        
+    Returns:
+        String: "in-the-money" or "out-of-the-money"
+    """
+    try:
+        # First try to determine from symbol
+        is_itm, option_type = is_option_in_the_money(symbol, strike_price, current_price)
+        
+        # If we couldn't determine from symbol, try using sentiment
+        if not option_type and sentiment:
+            # For bullish sentiment, assume call; for bearish, assume put
+            option_type = 'call' if sentiment == 'bullish' else 'put'
+            
+            # Convert strike to float if needed
+            if isinstance(strike_price, str):
+                strike_price = float(strike_price.replace('$', '').replace(',', ''))
+                
+            # Re-calculate ITM status based on sentiment-derived option type
+            if option_type == 'call':
+                is_itm = current_price > strike_price
+            else:  # put
+                is_itm = current_price < strike_price
+        
+        return "in-the-money" if is_itm else "out-of-the-money"
+    except Exception as e:
+        print(f"Error getting option moneyness: {str(e)}")
+        return "in-the-money"  # Default fallback
+
 def get_simplified_unusual_activity_summary(ticker):
     """
     Create a simplified, conversational summary of unusual options activity
