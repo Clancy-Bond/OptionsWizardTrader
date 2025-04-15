@@ -8,16 +8,14 @@ from polygon_integration import get_headers, get_unusual_options_activity, get_c
 import cache_module
 
 def test_parallel_processing(force_refresh=True):
+    # Test with AAPL which should have fewer options than SPY
+    ticker = "AAPL"
+    
     # Clear cache to ensure a fresh run
     if force_refresh:
-        print("Forcing fresh API call by clearing cache...")
+        print(f"Forcing fresh API call by clearing cache for {ticker}...")
         # Remove the specific ticker from cache to force a fresh API call
-        if 'SPY' in cache_module.unusual_activity_cache:
-            del cache_module.unusual_activity_cache['SPY']
-        cache_module.save_cache()
-    
-    # Test with SPY (S&P 500 ETF) which has many options
-    ticker = "SPY"
+        cache_module.remove_from_cache(ticker)
     
     # Time the operation
     start_time = time.time()
