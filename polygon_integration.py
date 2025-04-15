@@ -1249,10 +1249,19 @@ def is_option_in_the_money(symbol, strike_price, current_price):
         str: 'call' or 'put' indicating the option type
     """
     try:
+        # Validate inputs
+        if not current_price or current_price <= 0:
+            print(f"Warning: Invalid stock price {current_price}, cannot determine moneyness")
+            return False, None
+        
         # Convert strike_price to float if it's a string
         if isinstance(strike_price, str):
             # Remove any $ or commas
-            strike_price = float(strike_price.replace('$', '').replace(',', ''))
+            try:
+                strike_price = float(strike_price.replace('$', '').replace(',', ''))
+            except (ValueError, TypeError):
+                print(f"Warning: Could not convert strike price '{strike_price}' to float")
+                return False, None
         
         # Determine if it's a call or put based on the symbol
         option_type = None
@@ -1262,8 +1271,9 @@ def is_option_in_the_money(symbol, strike_price, current_price):
             elif 'P' in symbol:
                 option_type = 'put'
         
-        # If we couldn't determine the option type from the symbol, try to use the sentiment
+        # If we couldn't determine the option type from the symbol, return early
         if not option_type:
+            print(f"Warning: Could not determine option type from symbol '{symbol}'")
             return False, None
         
         # Determine if in-the-money
@@ -1289,6 +1299,19 @@ def get_option_moneyness(symbol, strike_price, current_price, sentiment=None):
         String: "in-the-money" or "out-of-the-money"
     """
     try:
+        # Validate inputs
+        if not current_price or current_price <= 0:
+            print(f"Warning: Invalid current price {current_price}, assuming out-of-the-money")
+            return "out-of-the-money"
+        
+        # Convert strike to float if needed, with better error handling
+        if isinstance(strike_price, str):
+            try:
+                strike_price = float(strike_price.replace('$', '').replace(',', ''))
+            except (ValueError, TypeError):
+                print(f"Warning: Could not convert strike price '{strike_price}' to float, assuming out-of-the-money")
+                return "out-of-the-money"
+        
         # First try to determine from symbol
         is_itm, option_type = is_option_in_the_money(symbol, strike_price, current_price)
         
@@ -1296,10 +1319,6 @@ def get_option_moneyness(symbol, strike_price, current_price, sentiment=None):
         if not option_type and sentiment:
             # For bullish sentiment, assume call; for bearish, assume put
             option_type = 'call' if sentiment == 'bullish' else 'put'
-            
-            # Convert strike to float if needed
-            if isinstance(strike_price, str):
-                strike_price = float(strike_price.replace('$', '').replace(',', ''))
                 
             # Re-calculate ITM status based on sentiment-derived option type
             if option_type == 'call':
@@ -1307,10 +1326,16 @@ def get_option_moneyness(symbol, strike_price, current_price, sentiment=None):
             else:  # put
                 is_itm = current_price < strike_price
         
+        # If we still don't have a clear determination, be conservative
+        if is_itm is None:
+            print(f"Warning: Could not determine moneyness for {symbol} with strike {strike_price}, assuming out-of-the-money")
+            return "out-of-the-money"
+        
         return "in-the-money" if is_itm else "out-of-the-money"
     except Exception as e:
         print(f"Error getting option moneyness: {str(e)}")
-        return "in-the-money"  # Default fallback
+        # More conservative default - assume out-of-the-money for safety
+        return "out-of-the-money"
 
 
 def get_simplified_unusual_activity_summary(ticker):
