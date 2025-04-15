@@ -32,7 +32,8 @@ def load_cache():
                 unusual_activity_cache = loaded_cache
                 print(f"Loaded {len(unusual_activity_cache)} items from cache file")
                 # Print cache contents for debugging
-                print_cache_contents()
+                # Call this after the function is fully defined
+                # print_cache_contents() - temporarily disabled to avoid circular reference
         else:
             print("No cache file found, starting with empty cache")
     except Exception as e:

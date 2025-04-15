@@ -920,8 +920,18 @@ def get_unusual_options_activity(ticker):
         all_bullish_count = sum(1 for item in unusual_activity if item.get('sentiment') == 'bullish')
         all_bearish_count = sum(1 for item in unusual_activity if item.get('sentiment') == 'bearish')
         
+        # Print detailed breakdown of all unusual options (not just top 5)
+        print(f"COMPLETE BREAKDOWN OF ALL UNUSUAL OPTIONS: {len(unusual_activity)} total unusual options found")
+        print(f"Total sentiment counts: {all_bullish_count} bullish ({all_bullish_count/len(unusual_activity)*100:.1f}%) / {all_bearish_count} bearish ({all_bearish_count/len(unusual_activity)*100:.1f}%)")
+        
         # Sort by unusualness score in descending order, with premium as a secondary factor
         unusual_activity.sort(key=lambda x: (x.get('unusualness_score', 0), x.get('premium', 0)), reverse=True)
+        
+        # Display top 10 unusual options
+        if len(unusual_activity) > 0:
+            print("TOP 10 MOST UNUSUAL OPTIONS:")
+            for idx, item in enumerate(unusual_activity[:10]):
+                print(f"  {idx+1}. {item.get('contract', 'Unknown')} - Score: {item.get('unusualness_score', 0)} - Sentiment: {item.get('sentiment', 'Unknown')} - Premium: ${item.get('premium', 0)/1000000:.2f}M")
         
         # Take top 5 (if we have that many)
         result = unusual_activity[:5]
