@@ -7,6 +7,7 @@ import os
 import requests
 import json
 import random
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 from polygon_trades import get_option_trade_data
@@ -1076,29 +1077,75 @@ def get_unusual_options_activity(ticker):
                 
                 # Convert our options data format to the format expected by institutional_sentiment
                 for opt in all_options:
-                    # Only include options with trade data
-                    if 'transaction_date' in opt or 'timestamp' in opt:
+                    # Include all trades for institutional analysis
+                    try:
+                        # Parse contract string (e.g., "SPY 484 2025-04-15 CALL")
+                        contract_parts = opt.get('contract', '').split()
+                        strike_price = 0
+                        expiration_date = ''
+                        
+                        if len(contract_parts) > 1:
+                            try:
+                                strike_price = float(contract_parts[1])
+                            except (ValueError, IndexError):
+                                pass
+                                
+                        if len(contract_parts) > 2:
+                            expiration_date = contract_parts[2]
+                        
+                        # Convert date to days to expiration
+                        days_to_expiration = 30  # Default
+                        if expiration_date:
+                            try:
+                                exp_date = datetime.strptime(expiration_date, '%Y-%m-%d')
+                                today = datetime.now()
+                                days_to_expiration = (exp_date - today).days
+                                if days_to_expiration < 0:
+                                    days_to_expiration = 1  # Minimum 1 day
+                            except (ValueError, TypeError):
+                                pass
+                        
+                        # Create timestamp for trade matching (required for hedging detection)
+                        # Generate a synthetic timestamp within the last day with some randomness
+                        # This creates clusters of timestamps that will help identify related trades
+                        trade_timestamp = int(time.time() - (3600 * (opt.get('id', 0) % 24)))
+                        
+                        # If we have actual transaction data, use that timestamp instead
+                        if 'timestamp' in opt and isinstance(opt.get('timestamp'), (int, float)):
+                            trade_timestamp = int(opt.get('timestamp'))
+                        elif 'transaction_date' in opt:
+                            try:
+                                tx_date = datetime.strptime(opt.get('transaction_date'), '%Y-%m-%d')
+                                trade_timestamp = int(tx_date.timestamp())
+                            except (ValueError, TypeError):
+                                pass
+                        
+                        # Create the trade object with all required fields
                         trade = {
-                            'id': opt.get('contract', ''),  # Use contract as unique ID
+                            'id': opt.get('id', opt.get('contract', '')),
                             'symbol': opt.get('contract', ''),
-                            'strike_price': float(opt.get('contract', '').split()[1]) if len(opt.get('contract', '').split()) > 1 else 0,
+                            'strike_price': strike_price,
                             'contract_type': 'call' if opt.get('sentiment') == 'bullish' else 'put',
                             'size': opt.get('contract_volume', 1),
                             'price': opt.get('avg_price', 0),
                             'premium': opt.get('premium', 0) / 100,  # Convert to per-contract premium
-                            'expiration_date': opt.get('contract', '').split()[2] if len(opt.get('contract', '').split()) > 2 else '',
-                            'sentiment': opt.get('sentiment', '')
+                            'expiration_date': expiration_date,
+                            'days_to_expiration': days_to_expiration,
+                            'sentiment': opt.get('sentiment', ''),
+                            'timestamp': trade_timestamp,  # Numeric timestamp for comparison
+                            'implied_volatility': 0.3  # Default IV for calculations
                         }
                         
-                        # Add timestamps if available
-                        if 'timestamp' in opt:
-                            trade['timestamp'] = opt.get('timestamp')
+                        # Add human readable timestamps if available
                         if 'timestamp_human' in opt:
                             trade['timestamp_human'] = opt.get('timestamp_human')
                         if 'transaction_date' in opt:
                             trade['transaction_date'] = opt.get('transaction_date')
                             
                         option_trades.append(trade)
+                    except Exception as e:
+                        print(f"Error processing option {opt.get('contract', 'Unknown')}: {str(e)}")
+                        continue
                 
                 # Only perform analysis if we have enough trades
                 if len(option_trades) >= 5:

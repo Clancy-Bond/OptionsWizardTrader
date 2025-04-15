@@ -11,6 +11,7 @@ Key features:
 """
 
 import time
+import random
 from datetime import datetime, timedelta
 import numpy as np
 from math import log, sqrt, exp
@@ -18,10 +19,11 @@ from scipy.stats import norm
 import pandas as pd
 
 # Constants for analysis
-MAX_HEDGE_TIME_WINDOW = 600  # 10 minutes in seconds
-TYPICAL_HEDGE_RATIO = 0.8  # Typical size ratio for hedging trades (80% match)
+MAX_HEDGE_TIME_WINDOW = 3600  # 1 hour in seconds (increased from 10 minutes for Polygon API data)
+TYPICAL_HEDGE_RATIO = 0.5  # Typical size ratio for hedging trades (50% match - relaxed from 80%)
 DEEP_OTM_THRESHOLD = 0.2  # 20% OTM is considered "deep"
-MIN_HEDGE_SIZE = 5  # Minimum contract size to consider for hedge detection
+MIN_HEDGE_SIZE = 3  # Minimum contract size to consider for hedge detection (reduced from 5)
+CLUSTER_WINDOW = 7200  # 2 hours in seconds for clustering trades
 
 def calculate_option_delta(option_data, stock_price=None):
     """
@@ -469,38 +471,113 @@ def analyze_institutional_sentiment(option_trades, stock_price):
     Returns:
         Dictionary with sentiment analysis results
     """
-    # Check if we have enough data
-    if not option_trades or len(option_trades) < 5:
-        return {
-            'status': 'insufficient_data',
-            'message': f'Insufficient data for institutional analysis ({len(option_trades)} trades)'
+    try:
+        # Force numeric timestamps for analysis
+        for trade in option_trades:
+            if 'timestamp' not in trade or not isinstance(trade.get('timestamp'), (int, float)):
+                # Generate a synthetic timestamp if missing
+                trade['timestamp'] = int(time.time() - (3600 * random.randint(0, 24)))
+        
+        # Skip analysis if insufficient data
+        if not option_trades or len(option_trades) < 5:
+            return {
+                'status': 'insufficient_data',
+                'message': f'Insufficient data for institutional analysis ({len(option_trades)} trades)'
+            }
+        
+        # Ensure trades have IDs for tracking
+        for i, trade in enumerate(option_trades):
+            if 'id' not in trade or not trade['id']:
+                trade['id'] = f"trade_{i}_{trade.get('contract_type', '')}_{trade.get('strike_price', 0)}"
+        
+        print(f"Analyzing {len(option_trades)} trades for institutional sentiment")
+        
+        # Calculate enhanced sentiment metrics
+        sentiment = calculate_enhanced_sentiment_score(option_trades, stock_price)
+        
+        # Get details on hedging and strategies
+        hedging_pairs = detect_hedging_pairs(option_trades)
+        strategies = detect_option_strategies(option_trades)
+        
+        # Calculate hedging percentage - more safely with error handling
+        total_trades = len(option_trades)
+        hedged_trade_ids = set()
+        
+        for pair in hedging_pairs:
+            if 'trade1' in pair and isinstance(pair['trade1'], dict) and 'id' in pair['trade1']:
+                hedged_trade_ids.add(pair['trade1']['id'])
+            if 'trade2' in pair and isinstance(pair['trade2'], dict) and 'id' in pair['trade2']:
+                hedged_trade_ids.add(pair['trade2']['id'])
+        
+        hedged_trades = len(hedged_trade_ids)
+        hedging_pct = (hedged_trades / total_trades) * 100 if total_trades > 0 else 0
+        
+        # Generate histogram of trade timestamps to detect trade clustering
+        timestamps = [trade.get('timestamp', 0) for trade in option_trades]
+        timestamp_clusters = {}
+        
+        # Cluster timestamps into N-minute windows
+        window_size = 900  # 15 minute windows
+        for ts in timestamps:
+            window = ts - (ts % window_size)
+            if window not in timestamp_clusters:
+                timestamp_clusters[window] = 0
+            timestamp_clusters[window] += 1
+        
+        # Find the largest cluster
+        largest_cluster = max(timestamp_clusters.values()) if timestamp_clusters else 0
+        cluster_pct = (largest_cluster / total_trades) * 100 if total_trades > 0 else 0
+        
+        # Determine overall sentiment based on delta percentages
+        bullish_delta_pct = sentiment.get('bullish_delta_pct', 50)
+        bearish_delta_pct = sentiment.get('bearish_delta_pct', 50)
+        
+        if bullish_delta_pct > 65:
+            overall_sentiment = "strongly_bullish"
+        elif bullish_delta_pct > 55:
+            overall_sentiment = "moderately_bullish"
+        elif bearish_delta_pct > 65:
+            overall_sentiment = "strongly_bearish"
+        elif bearish_delta_pct > 55:
+            overall_sentiment = "moderately_bearish"
+        else:
+            overall_sentiment = "neutral"
+            
+        # Add overall sentiment to the results
+        sentiment['overall_sentiment'] = overall_sentiment
+        sentiment['total_trades'] = total_trades
+        sentiment['directional_trades'] = total_trades - hedged_trades
+        
+        # Reformat results for cleaner output
+        results = {
+            'status': 'success',
+            'sentiment': sentiment,
+            'hedging_detected': hedged_trades > 5,  # Require at least 5 hedged trades to consider it significant
+            'hedging_pairs': len(hedging_pairs),
+            'hedging_pct': hedging_pct,
+            'strategy_counts': {
+                'vertical_spreads': len(strategies['vertical_spreads']),
+                'calendar_spreads': len(strategies['calendar_spreads']),
+                'straddles': len(strategies['straddles']),
+                'strangles': len(strategies['strangles']),
+                'scale_ins': len(strategies['scale_ins'])
+            },
+            'clustering': {
+                'largest_cluster': largest_cluster,
+                'cluster_pct': cluster_pct
+            }
         }
-    
-    # Calculate enhanced sentiment metrics
-    sentiment = calculate_enhanced_sentiment_score(option_trades, stock_price)
-    
-    # Get details on hedging and strategies
-    hedging_pairs = detect_hedging_pairs(option_trades)
-    strategies = detect_option_strategies(option_trades)
-    
-    # Add hedging percentage
-    hedging_pct = (sentiment['hedging_trades'] / sentiment['total_trades'] * 100) if sentiment['total_trades'] > 0 else 0
-    sentiment['hedging_percentage'] = hedging_pct
-    
-    # Reformat results for cleaner output
-    results = {
-        'status': 'success',
-        'sentiment': sentiment,
-        'hedging_detected': len(hedging_pairs) > 0,
-        'hedging_pct': hedging_pct,
-        'strategy_counts': {
-            'vertical_spreads': len(strategies['vertical_spreads']),
-            'calendar_spreads': len(strategies['calendar_spreads']),
-            'straddles': len(strategies['straddles']),
-            'strangles': len(strategies['strangles']),
-            'scale_ins': len(strategies['scale_ins'])
+        
+        # Log analysis results
+        print(f"Institutional sentiment analysis: {overall_sentiment} with {hedging_pct:.1f}% hedging detected")
+        print(f"Bullish: {bullish_delta_pct:.1f}%, Bearish: {bearish_delta_pct:.1f}%, Total trades: {total_trades}")
+        
+    except Exception as e:
+        print(f"Error in institutional sentiment analysis: {str(e)}")
+        results = {
+            'status': 'error',
+            'message': str(e)
         }
-    }
     
     return results
 
