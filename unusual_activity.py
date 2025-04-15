@@ -164,3 +164,57 @@ def detect_unusual_options_flow(option_symbols):
         'large_trades': [],
         'message': 'This function is deprecated. The system now uses Polygon.io API exclusively for unusual options activity detection.'
     }
+
+def run_unusual_activity_test(ticker):
+    """
+    Test function to run the unusual activity detection and print the results
+    with institutional sentiment analysis.
+    
+    Args:
+        ticker: Stock ticker symbol to analyze
+    """
+    print(f"===== Testing Unusual Options Activity for {ticker} =====")
+    
+    # Get the unusual activity data
+    result = get_simplified_unusual_activity_summary(ticker)
+    print("\n" + result + "\n")
+    
+    # Get the raw data to examine institutional sentiment
+    raw_data = polygon.get_unusual_options_activity(ticker)
+    
+    # Check if institutional analysis was performed
+    if isinstance(raw_data, dict) and 'institutional_analysis' in raw_data:
+        inst_analysis = raw_data.get('institutional_analysis', {})
+        print("\n===== Institutional Sentiment Analysis =====")
+        
+        if inst_analysis.get('status') == 'success':
+            sentiment = inst_analysis.get('sentiment', {})
+            hedging_pct = inst_analysis.get('hedging_pct', 0)
+            
+            print(f"Hedging detected: {inst_analysis.get('hedging_detected', False)}")
+            print(f"Hedging percentage: {hedging_pct:.1f}%")
+            print(f"Hedging pairs: {inst_analysis.get('hedging_pairs', 0)}")
+            
+            # Print delta-weighted sentiment
+            if 'bullish_delta_pct' in sentiment:
+                print(f"Bullish delta %: {sentiment.get('bullish_delta_pct', 0):.1f}%")
+                print(f"Bearish delta %: {sentiment.get('bearish_delta_pct', 0):.1f}%")
+            
+            # Print total trades analyzed
+            if 'total_trades' in sentiment:
+                print(f"Total trades analyzed: {sentiment.get('total_trades', 0)}")
+                print(f"Directional trades: {sentiment.get('directional_trades', 0)}")
+            
+            # Print strategy counts
+            strategy_counts = inst_analysis.get('strategy_counts', {})
+            if strategy_counts:
+                print("\nDetected strategies:")
+                for strategy, count in strategy_counts.items():
+                    if count > 0:
+                        print(f"  - {strategy}: {count}")
+        else:
+            print(f"Analysis failed: {inst_analysis.get('message', 'Unknown error')}")
+    else:
+        print("No institutional analysis data available in the results")
+    
+    print("\n===== End of Test =====\n")
