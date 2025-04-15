@@ -1060,13 +1060,77 @@ def get_unusual_options_activity(ticker):
         # Take top 5 (if we have that many)
         result = unusual_activity[:5]
         
-        # Add the overall sentiment counts to the result (using ALL options, not just unusual ones)
+        # Prepare standard result with metadata including ALL options (not just unusual ones)
         result_with_metadata = {
             'unusual_options': result,
             'total_bullish_count': all_bullish_count,
             'total_bearish_count': all_bearish_count,
             'all_options_analyzed': len(all_options)
         }
+        
+        # Perform institutional sentiment analysis if available
+        if INSTITUTIONAL_ANALYSIS_AVAILABLE:
+            try:
+                # Prepare option trades data for sentiment analysis
+                option_trades = []
+                
+                # Convert our options data format to the format expected by institutional_sentiment
+                for opt in all_options:
+                    # Only include options with trade data
+                    if 'transaction_date' in opt or 'timestamp' in opt:
+                        trade = {
+                            'id': opt.get('contract', ''),  # Use contract as unique ID
+                            'symbol': opt.get('contract', ''),
+                            'strike_price': float(opt.get('contract', '').split()[1]) if len(opt.get('contract', '').split()) > 1 else 0,
+                            'contract_type': 'call' if opt.get('sentiment') == 'bullish' else 'put',
+                            'size': opt.get('contract_volume', 1),
+                            'price': opt.get('avg_price', 0),
+                            'premium': opt.get('premium', 0) / 100,  # Convert to per-contract premium
+                            'expiration_date': opt.get('contract', '').split()[2] if len(opt.get('contract', '').split()) > 2 else '',
+                            'sentiment': opt.get('sentiment', '')
+                        }
+                        
+                        # Add timestamps if available
+                        if 'timestamp' in opt:
+                            trade['timestamp'] = opt.get('timestamp')
+                        if 'timestamp_human' in opt:
+                            trade['timestamp_human'] = opt.get('timestamp_human')
+                        if 'transaction_date' in opt:
+                            trade['transaction_date'] = opt.get('transaction_date')
+                            
+                        option_trades.append(trade)
+                
+                # Only perform analysis if we have enough trades
+                if len(option_trades) >= 5:
+                    # Get current stock price
+                    stock_price = get_current_price(ticker)
+                    
+                    # Perform institutional sentiment analysis
+                    inst_analysis = analyze_institutional_sentiment(option_trades, stock_price)
+                    
+                    # Add the results to our metadata
+                    result_with_metadata['institutional_analysis'] = inst_analysis
+                    
+                    # Generate the human-readable summary
+                    inst_summary = get_human_readable_summary(inst_analysis, ticker)
+                    result_with_metadata['institutional_summary'] = inst_summary
+                    
+                    # If hedging was detected, adjust the sentiment counts
+                    if inst_analysis.get('status') == 'success':
+                        sentiment = inst_analysis.get('sentiment', {})
+                        
+                        # Use delta-weighted sentiment if available (more accurate)
+                        if 'bullish_delta_pct' in sentiment and 'bearish_delta_pct' in sentiment:
+                            result_with_metadata['adjusted_bullish_pct'] = sentiment.get('bullish_delta_pct')
+                            result_with_metadata['adjusted_bearish_pct'] = sentiment.get('bearish_delta_pct')
+                            result_with_metadata['hedging_detected'] = inst_analysis.get('hedging_detected', False)
+                            result_with_metadata['hedging_pct'] = inst_analysis.get('hedging_pct', 0)
+                        
+                    print(f"Institutional sentiment analysis completed with {len(option_trades)} trades")
+                else:
+                    print(f"Insufficient trades for institutional sentiment analysis ({len(option_trades)} trades)")
+            except Exception as e:
+                print(f"Error in institutional sentiment analysis: {str(e)}")
         
         # Store in cache with current timestamp
         cache_module.add_to_cache(ticker, result_with_metadata)
@@ -1369,5 +1433,28 @@ def get_simplified_unusual_activity_summary(ticker):
     # Add overall flow percentages (based on ALL options contracts analyzed, not just unusual ones)
     total_analyzed_contracts = all_bullish_count + all_bearish_count
     summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish (based on {total_analyzed_contracts} analyzed option contracts)"
+    
+    # Add institutional sentiment analysis if available
+    if isinstance(result_with_metadata, dict) and 'institutional_summary' in result_with_metadata:
+        inst_summary = result_with_metadata.get('institutional_summary', '')
+        if inst_summary:
+            # Add a separator
+            summary += "\n\n" + "-" * 40 + "\n\n"
+            # Add the institutional sentiment analysis
+            summary += inst_summary
+    
+    # Check if hedging was detected and show adjusted flow percentages
+    if (isinstance(result_with_metadata, dict) and 
+        'adjusted_bullish_pct' in result_with_metadata and 
+        'adjusted_bearish_pct' in result_with_metadata and
+        'hedging_detected' in result_with_metadata and
+        result_with_metadata.get('hedging_detected', False)):
+        
+        adj_bullish_pct = round(result_with_metadata.get('adjusted_bullish_pct', 0))
+        adj_bearish_pct = round(result_with_metadata.get('adjusted_bearish_pct', 0))
+        hedging_pct = round(result_with_metadata.get('hedging_pct', 0))
+        
+        if hedging_pct > 5:  # Only show if there's significant hedging (>5%)
+            summary += f"\n\n📊 After filtering out {hedging_pct}% hedging activity, the adjusted flow is: {adj_bullish_pct}% bullish / {adj_bearish_pct}% bearish"
     
     return summary
