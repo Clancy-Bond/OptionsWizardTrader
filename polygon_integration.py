@@ -976,7 +976,7 @@ def get_unusual_options_activity(ticker):
         # Store in cache with current timestamp
         cache_module.add_to_cache(ticker, result_with_metadata)
         
-        print(f"Cached unusual activity data for {ticker} with {all_bullish_count} bullish and {all_bearish_count} bearish options out of {len(unusual_activity)} total unusual options (will expire in 5 minutes)")
+        print(f"Cached unusual activity data for {ticker} with {all_bullish_count} bullish and {all_bearish_count} bearish options out of {len(all_options)} total analyzed options (will expire in 5 minutes)")
         return result_with_metadata
         
     except Exception as e:
@@ -985,7 +985,13 @@ def get_unusual_options_activity(ticker):
         print(f"Not falling back to Yahoo Finance for {ticker} unusual options activity as requested")
         
         # Cache error results to prevent repeated API calls that will fail
-        empty_result = None
+        # Even for exceptions, we store an empty but structured result with sentiment counters
+        empty_result = {
+            'unusual_options': [],
+            'total_bullish_count': 0,
+            'total_bearish_count': 0,
+            'all_options_analyzed': 0
+        }
         cache_module.add_to_cache(ticker, empty_result)
         print(f"Cached error result for {ticker} (will expire in 5 minutes)")
         
@@ -1264,7 +1270,8 @@ def get_simplified_unusual_activity_summary(ticker):
     else:
         summary += f"• I'm seeing mixed activity for {ticker}. There is balanced call and put activity.\n\n"
     
-    # Add overall flow percentages
-    summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish"
+    # Add overall flow percentages (based on ALL options analyzed, not just unusual ones)
+    total_analyzed = all_bullish_count + all_bearish_count
+    summary += f"Overall flow: {bullish_pct}% bullish / {bearish_pct}% bearish (based on {total_analyzed} analyzed options)"
     
     return summary
