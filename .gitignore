@@ -1,0 +1,4 @@
+.env
+option_wizard_cache.pickle
+__pycache__/
+*.pyc
