@@ -202,7 +202,7 @@ class OptionsBot(commands.Bot):
             await message.channel.send(help_text)
         else:
             # Fallback for unrecognized queries
-            await message.channel.send("I couldn't understand that request. Please include a valid ticker symbol and ask about price estimates or unusual options activity.")
+            await message.channel.send("I couldn't understand that request. Please include a valid ticker symbol and ask about unusual options activity.")
     
     async def handle_price_request(self, message, parsed):
         """Handle option price estimation requests - currently disabled"""
