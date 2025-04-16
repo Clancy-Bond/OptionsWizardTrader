@@ -196,8 +196,7 @@ class OptionsBot(commands.Bot):
         elif not parsed['ticker'] and any(word in content.lower() for word in ['help', 'how', 'what']):
             # Provide help message
             help_text = ("I can help with options trading analysis. Here's what you can ask me:\n\n"
-                        "- Unusual options activity: `@SWJ-AI-Options unusual options for MSFT`\n"
-                        "- Unusual options for both calls and puts: `@SWJ-AI-Options unusual options for both calls and puts for AAPL`\n\n"
+                        "- Unusual options activity: `@SWJ-AI-Options unusual options for MSFT`\n\n"
                         "Make sure to include a valid ticker symbol in your question.")
             await message.channel.send(help_text)
         else:
