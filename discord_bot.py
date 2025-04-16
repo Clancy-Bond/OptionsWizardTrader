@@ -222,10 +222,155 @@ class OptionsBot(commands.Bot):
             parsed['option_type'] = 'call'  # Default to calls
         
         try:
-            # Format response here
-            response_text = f"Option price estimation for {parsed['ticker']} coming soon!"
-            await message.channel.send(response_text)
+            import yfinance as yf
+            from option_calculator import get_option_greeks, calculate_option_price, get_option_chain
+            from datetime import datetime, timedelta
+            import discord
+            from utils_file import format_ticker
+            
+            # Format the ticker symbol
+            ticker = format_ticker(parsed['ticker'])
+            target_price = parsed['target_price']
+            option_type = parsed['option_type']
+            
+            # Create a status message
+            status_message = await message.channel.send(f"🧮 Calculating option prices for {ticker}...")
+            
+            # Get stock data
+            stock = yf.Ticker(ticker)
+            
+            try:
+                current_price = stock.info.get('currentPrice', stock.history(period='1d')['Close'].iloc[-1])
+            except Exception as e:
+                await status_message.edit(content=f"Error getting current price for {ticker}: {str(e)}")
+                return
+                
+            # Generate a reasonable estimate for strike price if not provided
+            if parsed.get('strike_price'):
+                strike_price = parsed['strike_price']
+            else:
+                # Find available strikes near the current price
+                # Get options expiring in ~30 days (closest monthly)
+                expiry_dates = stock.options
+                if not expiry_dates:
+                    await status_message.edit(content=f"No options data available for {ticker}. The market may be closed or this ticker might not have options trading.")
+                    return
+                    
+                # Find expiration date ~30 days out
+                today = datetime.now().date()
+                target_date = today + timedelta(days=30)
+                closest_expiry = min(expiry_dates, key=lambda x: abs((datetime.strptime(x, '%Y-%m-%d').date() - target_date).days))
+                
+                # Get chain for this expiration
+                try:
+                    chain = get_option_chain(stock, closest_expiry, option_type)
+                    if chain.empty:
+                        await status_message.edit(content=f"No {option_type} options data available for {ticker} expiring {closest_expiry}.")
+                        return
+                    
+                    # For calls, find closest strike above current price
+                    # For puts, find closest strike below current price
+                    if option_type == 'call':
+                        valid_strikes = chain[chain['strike'] > current_price]['strike']
+                        if not len(valid_strikes):
+                            # If no strikes above, just use the highest available
+                            valid_strikes = chain['strike']
+                        strike_price = min(valid_strikes)
+                    else:
+                        valid_strikes = chain[chain['strike'] < current_price]['strike']
+                        if not len(valid_strikes):
+                            # If no strikes below, just use the lowest available
+                            valid_strikes = chain['strike']
+                        strike_price = max(valid_strikes)
+                except Exception as e:
+                    # If we can't get actual strikes, estimate based on current price
+                    if option_type == 'call':
+                        strike_price = round(current_price * 1.05, 1)  # 5% out of the money
+                    else:
+                        strike_price = round(current_price * 0.95, 1)  # 5% out of the money
+            
+            # Get expiration date (1 month out by default)
+            expiry_dates = stock.options
+            if not expiry_dates:
+                await status_message.edit(content=f"No options data available for {ticker}.")
+                return
+                
+            # Find expiration date ~30 days out
+            today = datetime.now().date()
+            target_date = today + timedelta(days=30)
+            closest_expiry = min(expiry_dates, key=lambda x: abs((datetime.strptime(x, '%Y-%m-%d').date() - target_date).days))
+            
+            # Calculate days to expiration
+            expiry_date = datetime.strptime(closest_expiry, '%Y-%m-%d').date()
+            days_to_expiration = (expiry_date - today).days
+            
+            # Get option greeks
+            greeks = get_option_greeks(stock, closest_expiry, strike_price, option_type)
+            if not greeks or 'error' in greeks:
+                # Can still make an estimate even without greeks
+                estimated_price = calculate_option_price(current_price, target_price, strike_price, {}, days_to_expiration, option_type)
+                current_option_price = None
+                greeks_available = False
+            else:
+                estimated_price = calculate_option_price(current_price, target_price, strike_price, greeks, days_to_expiration, option_type)
+                current_option_price = greeks.get('price')
+                greeks_available = True
+            
+            # Create an embed with the option price estimate
+            embed = discord.Embed(
+                title=f"🧮 {ticker} Option Price Estimation",
+                description=f"Estimated future value for {ticker} ${strike_price} {option_type.upper()} options expiring {expiry_date.strftime('%m/%d/%y')}",
+                color=0x00FF00 if option_type == 'call' else 0xFF0000
+            )
+            
+            # Current stock and option data
+            embed.add_field(
+                name="Current Data",
+                value=f"• Current {ticker} Price: **${current_price:.2f}**\n"
+                     + (f"• Current Option Price: **${current_option_price:.2f}**\n" if current_option_price else "")
+                     + f"• Days to Expiration: **{days_to_expiration}**",
+                inline=False
+            )
+            
+            # Target calculation
+            price_change = target_price - current_price
+            price_change_pct = (price_change / current_price) * 100
+            
+            embed.add_field(
+                name="Price Target",
+                value=f"• Target Stock Price: **${target_price:.2f}**\n"
+                     + f"• Change from Current: **${price_change:.2f}** ({price_change_pct:.2f}%)",
+                inline=False
+            )
+            
+            # Estimated option value
+            embed.add_field(
+                name="Option Value Estimate",
+                value=f"• Estimated Option Price: **${estimated_price:.2f}**\n"
+                     + (f"• Change from Current: **${estimated_price - current_option_price:.2f}** "
+                        f"({((estimated_price / current_option_price) - 1) * 100:.2f}%)" if current_option_price else ""),
+                inline=False
+            )
+            
+            # Add optional theta decay projection if greeks available
+            if greeks_available and 'theta' in greeks:
+                from calculate_dynamic_theta_decay import project_theta_decay
+                theta_decay_info = project_theta_decay(current_option_price, greeks['theta'] * 365, days_to_expiration)
+                embed.add_field(
+                    name="Theta Decay Projection",
+                    value=theta_decay_info,
+                    inline=False
+                )
+            
+            # Add disclaimer
+            embed.set_footer(text="This is an estimate based on the Black-Scholes model. Actual prices may vary depending on market conditions.")
+            
+            # Update the status message with the calculated data
+            await status_message.edit(content=None, embed=embed)
         except Exception as e:
+            import traceback
+            print(f"Error in option price calculator: {str(e)}")
+            print(traceback.format_exc())
             await message.channel.send(f"I encountered an error while calculating option prices: {str(e)}")
     
 
